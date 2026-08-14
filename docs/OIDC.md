@@ -123,11 +123,22 @@ curl -s -b ck.txt "$CALLBACK"                                           # → JS
 4. 记下 **Client ID** 和 **Client Secret**
 5. 配置到应用（环境变量或 SSM），`issuer_url = https://accounts.google.com`
 
-### GitHub
+### GitHub（已实装，走 OAuth 2.0）
+> GitHub 的 OAuth App **不是标准 OIDC Provider**（无 ID Token），本仓库已实装为纯
+> **OAuth 2.0 授权码流程**（`apps/site/src/github.rs`）：state cookie → authorize →
+> 换 access_token → GitHub userinfo → 签自有 JWT。线上验证通过。
+
 1. GitHub → **Settings → Developer settings → OAuth Apps → New OAuth App**
-2. **Authorization callback URL** 填：`https://你的域名/api/auth/github/callback`
-3. 记下 **Client ID** / **Client Secret**
-4. `issuer_url = https://github.com`（注意 GitHub 的 OIDC 支持有限，用 OAuth 2 流程）
+2. **Homepage URL** 填：`https://你的域名`
+3. **Authorization callback URL** 填：`https://你的域名/api/auth/github/callback`
+   - ⚠️ **OAuth App 没有 Webhook URL**——那是 GitHub App 的字段（收 GitHub 事件用），与登录无关，别用 GitHub App
+4. 记下 **Client ID** / **Client Secret**
+5. 存 SSM（SecureString）：
+   ```bash
+   aws ssm put-parameter --name /operon/dev/github_client_id --type SecureString --value <Client ID> --overwrite
+   aws ssm put-parameter --name /operon/dev/github_client_secret --type SecureString --value <Client Secret> --overwrite
+   ```
+6. 部署后 `GET /api/auth/github` 发起登录，回调返回自有 JWT（sub = GitHub user id）
 
 ### 部署
 - `client_id/secret` 存 SSM（SecureString），冷启动经 `AppConfig.secret()` 读取，明文不入仓库
@@ -158,7 +169,10 @@ curl -s -b ck.txt "$CALLBACK"                                           # → JS
 
 ## 八、相关代码
 
-- 实现：`crates/core/src/oidc.rs`（~400 行）
+- **OIDC（标准 Provider）**：`crates/core/src/oidc.rs`（openidconnect，Google 等）
+- **GitHub OAuth 2.0 适配**：`apps/site/src/github.rs`（授权码 + userinfo，已线上验证）
 - 演示：`apps/example/src/main.rs`（`MyAuthHandler` + `build_oidc_router`）
 - 测试：`infra/mock_idp.py`（本地模拟 IdP）
-- 状态：**已实现 + 本地 E2E 验证**（REQUIREMENTS.md FR-3.3 ✅）
+- 状态：
+  - OIDC（openidconnect）：**已实现 + 本地 E2E 验证**（REQUIREMENTS.md FR-3.3 ✅）
+  - GitHub OAuth：**已上线 + 线上验证**（shinvdu 登录成功，JWT 校验通过）
