@@ -7,11 +7,13 @@ pub mod auth;
 pub mod config;
 pub mod error;
 pub mod server;
+pub mod sqs;
 
-pub use auth::{resolve_jwt_seed, unix_now, Jwt, JwtAuth, JwtClaims};
+pub use auth::{resolve_jwt_seed, unix_now, ApiKeyAuth, Jwt, JwtAuth, JwtClaims};
 pub use config::{AppConfig, ConfigLoader};
 pub use error::AppError;
 pub use server::run_with_setup;
+pub use sqs::{run_sqs_with_setup, SqsHandler};
 
 use axum::Router;
 
@@ -68,7 +70,7 @@ where
 /// 用户代码的一站式导入：`use operon_core::prelude::*;`
 pub mod prelude {
     pub use crate::{
-        AppConfig, AppError, AppState, Jwt, JwtAuth, JwtClaims, OperonRouterExt,
-        run_with_setup,
+        AppConfig, AppError, AppState, ApiKeyAuth, Jwt, JwtAuth, JwtClaims,
+        OperonRouterExt, SqsHandler, run_sqs_with_setup, run_with_setup,
     };
 }

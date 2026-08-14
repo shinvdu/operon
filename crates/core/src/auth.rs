@@ -15,6 +15,7 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use serde::{Deserialize, Serialize};
+use subtle::ConstantTimeEq;
 
 use crate::config::AppConfig;
 use crate::error::AppError;
@@ -149,10 +150,11 @@ mod tests {
     fn tampered_payload_rejected() {
         let jwt = test_jwt();
         let token = jwt.sign(&base_claims()).unwrap();
-        // 篡改 payload 段（第二段）
+        // 篡改 payload 段（第二段）：改中间字符，确保产生变化
         let parts: Vec<&str> = token.split('.').collect();
         let mut bad_payload = parts[1].to_string();
-        bad_payload.replace_range(0..1, "x");
+        let mid = bad_payload.len() / 2;
+        bad_payload.replace_range(mid..mid + 1, "0");
         let bad = format!("{}.{}.{}", parts[0], bad_payload, parts[2]);
         assert!(matches!(jwt.verify(&bad), Err(AppError::Unauthorized(_))));
     }
@@ -161,10 +163,9 @@ mod tests {
     fn tampered_signature_rejected() {
         let jwt = test_jwt();
         let token = jwt.sign(&base_claims()).unwrap();
+        // 篡改签名段：整体替换为固定值（保证变化且 base64 合法）
         let parts: Vec<&str> = token.split('.').collect();
-        let mut bad_sig = parts[2].to_string();
-        bad_sig.replace_range(0..1, "x");
-        let bad = format!("{}.{}.{}", parts[0], parts[1], bad_sig);
+        let bad = format!("{}.{}.{}", parts[0], parts[1], "A".repeat(parts[2].len()));
         assert!(matches!(jwt.verify(&bad), Err(AppError::Unauthorized(_))));
     }
 
@@ -191,6 +192,65 @@ mod tests {
         let token = a.sign(&base_claims()).unwrap();
         // 用不同密钥验证应失败
         assert!(matches!(b.verify(&token), Err(AppError::Unauthorized(_))));
+    }
+
+    #[tokio::test]
+    async fn api_key_auth_valid_and_invalid() {
+        use axum::body::Body;
+        use axum::http::Request;
+        use axum::routing::get;
+        use axum::Router;
+        use std::collections::HashMap;
+        use tower::ServiceExt;
+
+        let mut secrets = HashMap::new();
+        secrets.insert("api_key".to_string(), "secret-key-123".to_string());
+        let config = AppConfig {
+            project: "test".into(),
+            environment: "test".into(),
+            region: "us-west-2".into(),
+            table_prefix: "test-".into(),
+            secrets,
+            dev_mode: true,
+        };
+        let app = Router::new()
+            .route("/protected", get(|_: ApiKeyAuth| async { "ok" }))
+            .with_state(config);
+
+        // 正确 key → 200
+        let res = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/protected")
+                    .header("x-api-key", "secret-key-123")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), axum::http::StatusCode::OK);
+
+        // 错误 key → 401
+        let res = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/protected")
+                    .header("x-api-key", "wrong-key")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), axum::http::StatusCode::UNAUTHORIZED);
+
+        // 无 header → 401
+        let res = app
+            .oneshot(Request::builder().uri("/protected").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(res.status(), axum::http::StatusCode::UNAUTHORIZED);
     }
 }
 
@@ -220,6 +280,35 @@ where
         let jwt = Jwt::from_ref(_state);
         let claims = jwt.verify(token)?;
         Ok(JwtAuth(claims))
+    }
+}
+
+/// axum 提取器：从 `X-API-Key` 头验证，与 SSM 配置的 `api_key` 常量时间比较。
+/// 对应文章 4.3 节「第二层：API Key 验证」——服务间调用用。
+pub struct ApiKeyAuth;
+
+impl<S> FromRequestParts<S> for ApiKeyAuth
+where
+    S: Send + Sync,
+    AppConfig: axum::extract::FromRef<S>,
+{
+    type Rejection = AppError;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let key = parts
+            .headers
+            .get("x-api-key")
+            .and_then(|v| v.to_str().ok())
+            .ok_or_else(|| AppError::Unauthorized("missing X-API-Key header".into()))?;
+        let config = AppConfig::from_ref(state);
+        let expected = config
+            .secret("api_key")
+            .ok_or_else(|| AppError::Internal("api_key not configured".into()))?;
+        // 常量时间比较防时序攻击
+        if !bool::from(expected.as_bytes().ct_eq(key.as_bytes())) {
+            return Err(AppError::Unauthorized("invalid api key".into()));
+        }
+        Ok(Self)
     }
 }
 

@@ -46,7 +46,7 @@ where
     Ok(())
 }
 
-fn init_tracing() {
+pub(crate) fn init_tracing() {
     use tracing_subscriber::EnvFilter;
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
         if std::env::var("RUST_LOG").is_ok() {

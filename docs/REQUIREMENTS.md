@@ -169,10 +169,10 @@
 
 ### Should（应该，框架的核心竞争力）
 - [⬜] OIDC 登录（PKCE + 加密 cookie + JWKS 端点）（FR-3.3, 3.4）
-- [⬜] API Key 常量时间验证（FR-3.2）
-- [⬜] SQS Worker 运行时 `run_sqs_with_setup`（FR-1.4）
-- [⬜] Webhook 验证器（Stripe/GitHub/HMAC）（FR-7）
-- [⬜] S3 封装 + 预签名 URL（FR-6）
+- [✅] API Key 常量时间验证（FR-3.2）
+- [✅] SQS Worker 运行时 `run_sqs_with_setup`（FR-1.4）
+- [✅] Webhook 验证器（Stripe/GitHub/HMAC）（FR-7）
+- [✅] S3 封装 + 预签名 URL（FR-6）
 - [✅] CLI 完整：init / dev / deploy / logs（FR-8；ARM64 优先仍 ⬜）
 - [⬜] 基础设施 npm 包抽象（FR-9.3, 9.4）
 - [⬜] 边缘认证（CloudFront Function）（FR-3.5）

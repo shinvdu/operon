@@ -3,6 +3,8 @@ resolver = "2"
 members = [
     "crates/core",
     "crates/dynamo",
+    "crates/s3",
+    "crates/webhook",
     "apps/example",
     "apps/site",
     "cli",
