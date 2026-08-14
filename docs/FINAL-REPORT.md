@@ -67,8 +67,9 @@
 ### 阶段五：能力补全与质量保障
 - **CLI 完善**：`init` / `dev` / `deploy` / `logs` 一条龙（脚手架/本地运行/部署/日志）
 - **后端模块化**：apps/site 拆为 main/models/handlers（对应文章三层架构）
-- **单元测试**：26 个（JWT/错误映射/模型/认证/API Key/Webhook/S3/SQS），约定新功能必须带测试
-- **框架能力补全**：API Key 验证、Webhook 验证器、S3 封装（预签名 URL）、SQS Worker 运行时
+- **单元测试**：29 个（JWT/错误映射/模型/认证/API Key/Webhook/S3/SQS/OIDC），约定新功能必须带测试
+- **框架能力补全**：API Key 验证、Webhook 验证器、S3 封装（预签名 URL）、SQS Worker 运行时、OIDC（openidconnect）
+- **认证落地**：OIDC（openidconnect，本地 E2E）+ **GitHub OAuth 2.0 登录**（`github.rs`，线上验证通过）
 - **验证**：`cargo test` 全绿，核心链路回归通过
 
 ---
@@ -210,7 +211,7 @@ b6872fd feat(operon): 搭建一人公司无服务器框架端到端骨架
 
 ## 十、后续建议
 
-- [x] OIDC 登录（2026-08-14 完成，基于 openidconnect）
+- [x] OIDC 登录（openidconnect，本地 E2E）+ GitHub OAuth 2.0（线上验证，2026-08 完成）
 - [ ] 基础设施 npm 包抽象（CFN 模板 → 可复用 npm 包，文章「600 行到 80 行」）
 - [ ] 边缘认证（CloudFront Function 纵深防御，第一层边缘验 JWT）
 - [ ] Lambda 内存 256MB → 128MB（实测仅用 36MB，成本再降一半）
@@ -231,5 +232,6 @@ b6872fd feat(operon): 搭建一人公司无服务器框架端到端骨架
 | `docs/DESIGN.md` | 技术设计（ADR） |
 | `docs/API.md` | 接口文档（curl 示例） |
 | `docs/COST.md` | 成本核算 |
+| `docs/OIDC.md` | OIDC/GitHub 登录实现与配置指南 |
 | `docs/AWS-OPERATIONS.md` | AWS CLI 操作手册（证书/创建/更新/测试/告警/清理） |
 | `docs/FINAL-REPORT.md` | 本报告 |
