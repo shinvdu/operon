@@ -8,7 +8,7 @@
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use axum::extract::{FromRef, FromRequestParts, Extension};
+use axum::extract::{Extension, FromRequestParts};
 use axum::http::header::AUTHORIZATION;
 use axum::http::request::Parts;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;

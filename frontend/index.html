@@ -91,6 +91,7 @@
       <a href="#services">服务</a>
       <a href="#why">优势</a>
       <a href="#contact">联系我们</a>
+      <a href="#" id="authLink" style="font-size:.85rem; border:1px solid #2563eb; padding:6px 14px; border-radius:6px; color:#2563eb;">登录</a>
       <a href="/admin.html" style="font-size:.85rem; border:1px solid #334155; padding:6px 14px; border-radius:6px;">管理员</a>
     </div>
   </div>
@@ -182,6 +183,18 @@
 </footer>
 
 <script>
+// 导航登录状态：已登录 → 我的记录；未登录 → 跳 Google 登录
+(function initAuth() {
+  const link = document.getElementById('authLink');
+  if (localStorage.getItem('operon_token')) {
+    link.textContent = '我的记录';
+    link.href = '/my.html';
+  } else {
+    link.textContent = '登录';
+    link.href = '/api/auth/google';
+  }
+})();
+
 document.getElementById('leadForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const msg = document.getElementById('formMsg');
@@ -203,12 +216,16 @@ document.getElementById('leadForm').addEventListener('submit', async (e) => {
     const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(body));
     const hash = [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('');
 
+    const headers = {
+      'Content-Type': 'application/json',
+      'x-amz-content-sha256': hash,
+    };
+    // 已登录则带上 JWT，提交关联到当前用户（可在「我的记录」查看）
+    const token = localStorage.getItem('operon_token');
+    if (token) headers['X-Authorization'] = `Bearer ${token}`;
     const res = await fetch('/api/leads', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-amz-content-sha256': hash,
-      },
+      headers,
       body,
     });
     const data = await res.json().catch(() => ({}));

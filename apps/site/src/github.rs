@@ -12,7 +12,7 @@ use axum::extract::{Extension, Query};
 use axum::http::{header, HeaderMap, HeaderValue};
 use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::get;
-use axum::{Json, Router};
+use axum::Router;
 use operon_core::prelude::*;
 use reqwest::Client as HttpClient;
 use serde::Deserialize;
@@ -153,12 +153,15 @@ async fn callback(
         extra,
     };
     let token = state.jwt.sign(&claims)?;
-    Ok(Json(serde_json::json!({
-        "token": token,
-        "sub": user.id,
-        "login": user.login,
-        "email": user.email,
-        "name": user.name,
-    }))
-    .into_response())
+    // 浏览器登录场景：HTML 存 token 到 localStorage 并跳转 /my.html
+    let html = format!(
+        r#"<!doctype html><html><meta charset="utf-8"><script>
+        localStorage.setItem('operon_token', '{}');
+        localStorage.setItem('operon_user', '{}');
+        location.href = '/my.html';
+        </script></html>"#,
+        token.replace('\\', "\\\\").replace('\'', "\\'"),
+        user.id
+    );
+    Ok(([(header::CONTENT_TYPE, "text/html")], html).into_response())
 }

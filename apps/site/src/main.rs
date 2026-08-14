@@ -30,6 +30,7 @@ async fn main() -> anyhow::Result<()> {
                 Json(serde_json::json!({ "status": "ok", "service": "operon-site" }))
             }))
             .route("/api/leads", post(handlers::submit_lead))
+            .route("/api/my/leads", get(handlers::my_leads))
             .route("/api/admin/login", post(handlers::admin_login))
             .route("/api/admin/leads", get(handlers::admin_leads));
 

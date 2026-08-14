@@ -107,15 +107,45 @@ impl DynamoClient {
 
     /// 按主键 `pk` 查询所有同键记录（SK 升序）。
     pub async fn query<T: DeserializeOwned>(&self, pk: &str) -> Result<Vec<T>, DynamoError> {
-        let out = self
+        self.query_key_condition("pk", pk).await
+    }
+
+    /// 按 GSI 查询（key 为 GSI 分区键列，pk 为值）。
+    pub async fn query_index<T: DeserializeOwned>(
+        &self,
+        index: &str,
+        pk: &str,
+    ) -> Result<Vec<T>, DynamoError> {
+        self.query_key_condition_with_index(index, "gsi1pk", pk).await
+    }
+
+    async fn query_key_condition<T: DeserializeOwned>(
+        &self,
+        key_col: &str,
+        pk: &str,
+    ) -> Result<Vec<T>, DynamoError> {
+        self.query_key_condition_with_index("", key_col, pk).await
+    }
+
+    async fn query_key_condition_with_index<T: DeserializeOwned>(
+        &self,
+        index: &str,
+        key_col: &str,
+        pk: &str,
+    ) -> Result<Vec<T>, DynamoError> {
+        let mut req = self
             .client
             .query()
             .table_name(&self.table)
-            .key_condition_expression("pk = :pk")
+            .key_condition_expression(format!("{key_col} = :pk"))
             .expression_attribute_values(
                 ":pk",
                 aws_sdk_dynamodb::types::AttributeValue::S(pk.into()),
-            )
+            );
+        if !index.is_empty() {
+            req = req.index_name(index);
+        }
+        let out = req
             .send()
             .await
             .map_err(|e| DynamoError::Aws(e.to_string()))?;

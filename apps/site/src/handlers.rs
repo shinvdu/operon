@@ -2,7 +2,7 @@
 //! 对应文章三层架构的「路由层」：极薄，只做提取认证、解析参数、调数据层。
 
 use axum::extract::Extension;
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, StatusCode};
 use axum::Json;
 use operon_core::prelude::*;
 use operon_dynamo::DynamoClient;
@@ -42,16 +42,31 @@ impl OidcAuthHandler for SiteOidcHandler {
 }
 
 /// POST /api/leads —— 采购需求提交（公开）→ DynamoDB。
+/// 若带有效 JWT（X-Authorization），关联到当前用户（写入 user_id + GSI1，供「我的记录」查询）。
 pub async fn submit_lead(
     Extension(state): Extension<AppState>,
+    headers: HeaderMap,
     Json(body): Json<LeadRequest>,
 ) -> Result<(StatusCode, Json<LeadOut>), AppError> {
     let now = operon_core::unix_now();
     let id = uuid::Uuid::new_v4().to_string();
+    // 可选认证：有合法 JWT 才关联用户（未登录也能匿名提交）
+    let user_id = headers
+        .get("x-authorization")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "))
+        .and_then(|token| state.jwt.verify(token).ok())
+        .map(|c| c.sub);
+    let gsi1 = user_id.as_ref().map(|uid| {
+        (format!("USER#{uid}"), format!("{now:020}"))
+    });
     let lead = Lead {
         pk: "LEADS".into(),
         sk: format!("{now:020}"), // 零填充时间戳：升序存储，倒序查询
         id: id.clone(),
+        user_id,
+        gsi1pk: gsi1.as_ref().map(|(p, _)| p.clone()),
+        gsi1sk: gsi1.as_ref().map(|(_, s)| s.clone()),
         name: body.name,
         company: body.company,
         email: body.email,
@@ -102,6 +117,19 @@ pub async fn admin_login(
         token,
         username: "admin".into(),
     }))
+}
+
+/// GET /api/my/leads —— 当前登录用户提交的记录（JWT 保护，按 GSI1 查询）。
+pub async fn my_leads(
+    Extension(state): Extension<AppState>,
+    JwtAuth(claims): JwtAuth,
+) -> Result<Json<Vec<LeadOut>>, AppError> {
+    let db = DynamoClient::new(&state.aws_config, leads_table(&state));
+    let mut leads: Vec<Lead> = db
+        .query_index("gsi1", &format!("USER#{}", claims.sub))
+        .await?;
+    leads.reverse(); // 最新在前
+    Ok(Json(leads.into_iter().map(LeadOut::from).collect()))
 }
 
 /// GET /api/admin/leads —— 需求列表（JWT + admin role 保护，时间倒序）。

@@ -97,7 +97,7 @@ aws cloudformation deploy \
   --no-fail-on-empty-changeset
 
 step "[6/7] 上传前端静态文件到 s3://${FRONTEND_BUCKET}"
-for f in index.html admin.html; do
+for f in index.html admin.html my.html; do
   if [ -f "$ROOT/frontend/$f" ]; then
     aws s3api put-object --bucket "$FRONTEND_BUCKET" --key "$f" \
       --body "$ROOT/frontend/$f" --content-type "text/html; charset=utf-8" >/dev/null

@@ -4,11 +4,21 @@
 use serde::{Deserialize, Serialize};
 
 /// 采购需求（DynamoDB `operon-{env}-leads` 单表：pk="LEADS", sk=零填充时间戳）。
+/// 登录用户提交时关联 `user_id`，并双写 GSI1（gsi1pk=`USER#{sub}`）支持「我的记录」查询。
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Lead {
     pub pk: String,
     pub sk: String,
     pub id: String,
+    /// 提交用户的 JWT sub（登录时才有）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub user_id: Option<String>,
+    /// GSI1 分区键：`USER#{sub}`
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gsi1pk: Option<String>,
+    /// GSI1 排序键：零填充时间戳
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gsi1sk: Option<String>,
     pub name: String,
     pub company: String,
     pub email: String,
@@ -86,6 +96,9 @@ mod tests {
             pk: "LEADS".into(),
             sk: "00000000000000000123".into(),
             id: "id-1".into(),
+            user_id: Some("user-1".into()),
+            gsi1pk: Some("USER#user-1".into()),
+            gsi1sk: Some("00000000000000000123".into()),
             name: "张伟".into(),
             company: "示例科技".into(),
             email: "a@b.com".into(),

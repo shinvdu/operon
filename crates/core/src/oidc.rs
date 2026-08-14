@@ -405,7 +405,21 @@ async fn callback(
             );
             Ok(response)
         }
-        TokenDelivery::Json => Ok(Json(payload).into_response()),
+        // 浏览器登录场景：返回 HTML 把 token 存到 localStorage 并跳转（而非裸 JSON）
+        TokenDelivery::Json => {
+            let token = payload.get("token").and_then(|t| t.as_str()).unwrap_or("");
+            let sub = payload.get("sub").cloned().unwrap_or(serde_json::Value::Null);
+            let html = format!(
+                r#"<!doctype html><html><meta charset="utf-8"><script>
+                localStorage.setItem('operon_token', '{}');
+                localStorage.setItem('operon_user', '{}');
+                location.href = '/my.html';
+                </script></html>"#,
+                token.replace('\\', "\\\\").replace('\'', "\\'"),
+                sub.to_string().replace('\\', "\\\\").replace('\'', "\\'")
+            );
+            Ok(([(header::CONTENT_TYPE, "text/html")], html).into_response())
+        }
     }
 }
 

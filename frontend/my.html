@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>我的记录 · Operon Cloud</title>
+<style>
+  :root {
+    --primary: #2563eb; --bg: #0b1220; --bg-soft: #111a2e; --card: #16203a;
+    --text: #e2e8f0; --muted: #94a3b8; --accent: #38bdf8;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+  .container { max-width: 980px; margin: 0 auto; padding: 0 24px; }
+  .topbar { display: flex; align-items: center; justify-content: space-between; padding: 18px 0; border-bottom: 1px solid #1e293b; }
+  .brand { font-weight: 700; } .brand a { color: var(--text); text-decoration: none; }
+  .btn { padding: 10px 20px; border-radius: 8px; border: none; cursor: pointer; font-size: .95rem; background: var(--primary); color: #fff; }
+  .btn-ghost { background: transparent; border: 1px solid #334155; color: var(--text); }
+  .btn:hover { opacity: .9; }
+
+  .login-wrap { display: flex; justify-content: center; padding: 100px 0; }
+  .login-card { background: var(--card); border: 1px solid #1e293b; border-radius: 14px; padding: 40px; width: 400px; text-align: center; }
+  .login-card h2 { margin-bottom: 12px; font-size: 1.4rem; }
+  .login-card p { color: var(--muted); font-size: .9rem; margin-bottom: 28px; }
+  .login-card .btn { margin-bottom: 14px; }
+
+  .panel { padding: 30px 0 60px; }
+  .panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+  .panel-head h2 { font-size: 1.35rem; }
+  .user-info { color: var(--muted); font-size: .9rem; }
+
+  table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid #1e293b; border-radius: 12px; overflow: hidden; font-size: .92rem; }
+  th, td { text-align: left; padding: 12px 14px; border-bottom: 1px solid #1e293b; vertical-align: top; }
+  th { background: var(--bg-soft); color: var(--muted); font-weight: 600; white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: .78rem; background: rgba(56,189,248,.15); color: var(--accent); }
+  .req { max-width: 300px; white-space: pre-wrap; }
+  .empty { text-align: center; color: var(--muted); padding: 60px 0; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <div class="topbar">
+    <div class="brand"><a href="/">← Operon Cloud</a></div>
+    <div id="topRight"></div>
+  </div>
+</div>
+
+<!-- 登录视图 -->
+<div id="loginView" class="container login-wrap">
+  <div class="login-card">
+    <h2>登录查看我的记录</h2>
+    <p>用 GitHub 或 Google 登录后，可以看到你提交过的采购需求。</p>
+    <button class="btn" style="width:100%" onclick="location.href='/api/auth/google'">使用 Google 登录</button>
+    <button class="btn btn-ghost" style="width:100%" onclick="location.href='/api/auth/github'">使用 GitHub 登录</button>
+  </div>
+</div>
+
+<!-- 记录视图 -->
+<div id="panelView" class="container panel hidden">
+  <div class="panel-head">
+    <h2>我的采购记录</h2>
+    <div>
+      <span class="user-info" id="userLabel"></span>
+      <button class="btn btn-ghost" id="logoutBtn">退出登录</button>
+    </div>
+  </div>
+  <table>
+    <thead>
+      <tr><th>提交时间</th><th>姓名</th><th>公司</th><th>邮箱</th><th>需求描述</th><th>预算</th><th>状态</th></tr>
+    </thead>
+    <tbody id="leadsBody"></tbody>
+  </table>
+  <div id="emptyMsg" class="empty hidden">还没有提交过需求 —— 去首页填写采购需求表单吧。</div>
+</div>
+
+<script>
+const TOKEN_KEY = 'operon_token', USER_KEY = 'operon_user';
+function getToken() { return localStorage.getItem(TOKEN_KEY); }
+function getUser() {
+  try { const u = JSON.parse(localStorage.getItem(USER_KEY) || 'null'); return u && u.sub ? u : null; }
+  catch { return null; }
+}
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function showLogin() {
+  document.getElementById('panelView').classList.add('hidden');
+  document.getElementById('loginView').classList.remove('hidden');
+  document.getElementById('topRight').innerHTML = '';
+}
+
+async function loadLeads() {
+  const token = getToken();
+  const user = getUser();
+  document.getElementById('loginView').classList.add('hidden');
+  document.getElementById('panelView').classList.remove('hidden');
+  document.getElementById('topRight').innerHTML = '<a href="/" style="color:var(--accent);font-size:.9rem">返回首页</a>';
+  document.getElementById('userLabel').textContent = user ? '已登录' : '';
+
+  try {
+    const res = await fetch('/api/my/leads', { headers: { 'X-Authorization': `Bearer ${token}` } });
+    if (res.status === 401) { localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(USER_KEY); showLogin(); return; }
+    const leads = await res.json();
+    document.getElementById('emptyMsg').classList.toggle('hidden', leads.length > 0);
+    document.getElementById('leadsBody').innerHTML = leads.map(l => `
+      <tr>
+        <td style="white-space:nowrap">${new Date(l.created_at * 1000).toLocaleString('zh-CN')}</td>
+        <td>${escapeHtml(l.name)}</td>
+        <td>${escapeHtml(l.company)}</td>
+        <td>${escapeHtml(l.email)}</td>
+        <td class="req">${escapeHtml(l.requirements)}</td>
+        <td>${escapeHtml(l.budget || '-')}</td>
+        <td><span class="badge">${escapeHtml(l.status)}</span></td>
+      </tr>`).join('');
+  } catch (e) {
+    document.getElementById('leadsBody').innerHTML = `<tr><td colspan="7" style="color:var(--error)">加载失败：${escapeHtml(e.message)}</td></tr>`;
+  }
+}
+
+document.getElementById('logoutBtn').addEventListener('click', () => {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USER_KEY);
+  showLogin();
+});
+
+// 初始化
+getToken() ? loadLeads() : showLogin();
+</script>
+</body>
+</html>
