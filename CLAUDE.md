@@ -26,8 +26,12 @@ export OPERON_DEV_JWT_SEED="$(cargo run -q -p operon-cli -- dev-seed)"
 export OPERON_DEV_ADMIN_PASSWORD="TestAdmin!123" PORT=8080
 cargo run -p operon-site
 
-# CLI
-cargo run -q -p operon-cli -- gen-seed          # 生成密钥/密码
+# CLI 一条龙
+cargo run -q -p operon-cli -- init --template api my-app   # 脚手架新应用
+cargo run -q -p operon-cli -- dev                         # 本地运行
+cargo run -q -p operon-cli -- deploy --env dev            # 部署（prod 需确认）
+cargo run -q -p operon-cli -- logs --env dev              # CloudWatch 日志
+cargo run -q -p operon-cli -- gen-seed                    # 生成密钥/密码
 cargo run -q -p operon-cli -- token --seed <b64> --sub admin   # 签 JWT
 
 # 端到端部署（编译→打包→上传后端+前端→CFN，含 CloudFront）
@@ -37,19 +41,32 @@ cd infra && ./deploy.sh dev
 ## 环境与凭证（重要）
 
 - **AWS 账号** `317618187345`（IAM user `silas`），区域 **us-west-2**
-- 凭证硬编码在 `infra/deploy.sh`（测试账号）
+- 凭证从项目根 `.env` 读取（`.env` 已 gitignore 排除，**不入库**；格式见 `.env.example`）
 - **网络：上传/curl 必须走代理** `source ~/proxy.sh`（直连 ~50KB/s 极慢，走代理 ~3s/8MB）
-- 管理员密码在 SSM `/operon/dev/admin_password`（首次部署自动生成并打印）
+- 管理员密码在 SSM `/operon/dev/admin_password`（首次部署自动生成并打印，明文不入库）
 
 ## 代码约定
 
-- **后端** `apps/site/src/main.rs`：单文件，`Router::new()` 注册全部路由
-- **前端** `frontend/`：原生 HTML/JS（无构建）。index.html 宣传页+表单，admin.html 登录+列表
-  - POST 前端用 `crypto.subtle.digest('SHA-256')` 计算 `x-amz-content-sha256`（否则 403）
-  - 业务 JWT 走 `X-Authorization`（CloudFront OAC 占用 Authorization 头）
-- **数据模型**：`Lead` 结构（pk=`LEADS`, sk=零填充时间戳），DynamoDB 单表
-- **管理员**：内置 `admin` 账号，密码比对用常量时间比较（`subtle::ConstantTimeEq`）
-- 新增路由参照现有 handler（`State<AppState>` + `Result<Json<T>, AppError>`）
+### 后端 `apps/site/`（模块化，对应文章三层架构）
+
+```
+apps/site/src/
+├── main.rs       # 入口：run_with_setup + Router 注册（唯一接触框架的地方）
+├── models.rs     # 模型层：Lead / LeadRequest / LoginRequest 等 + DynamoDB 映射
+└── handlers.rs   # 路由层：submit_lead / admin_login / admin_leads + 表名 helper
+```
+
+- **新增路由三步**：main.rs `Router::new()` 注册 → handlers.rs 加 handler → models.rs 加请求/响应结构
+- **handler 约定**：`State(state): State<AppState>` 取框架注入状态，返回 `Result<Json<T>, AppError>`（统一错误 JSON）
+- **数据模型**：`Lead` 单表（pk=`LEADS`, sk=零填充时间戳），表名自动带环境前缀（`operon-dev-leads`）
+- **管理员**：内置 `admin`，密码存 SSM + `subtle::ConstantTimeEq` 常量时间比对，JWT 带 `role: admin`
+- **认证**：受保护路由 handler 参数加 `JwtAuth(claims): JwtAuth`，自动从 `X-Authorization` 提取验证
+
+### 前端 `frontend/`（原生 HTML/JS，无构建）
+
+- index.html 宣传页+采购表单；admin.html 登录+需求列表
+- POST 用 `crypto.subtle.digest('SHA-256')` 计算 `x-amz-content-sha256`（否则 403）
+- 业务 JWT 走 `X-Authorization`（CloudFront OAC 占用 Authorization 头）
 
 ## 部署排坑速查
 
