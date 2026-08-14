@@ -11,8 +11,11 @@
 //! - `POST /api/admin/login`       管理员登录（SSM 密码）→ 签发 JWT
 //! - `GET  /api/admin/leads`       需求列表（JWT + admin role 保护）
 
+mod github;
 mod handlers;
 mod models;
+
+use std::sync::Arc;
 
 use axum::extract::Extension;
 use axum::routing::{get, post};
@@ -22,17 +25,30 @@ use operon_core::prelude::*;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     run_with_setup(|state| async move {
-        let router = Router::new()
+        let mut router = Router::new()
             .route("/health", get(|| async {
                 Json(serde_json::json!({ "status": "ok", "service": "operon-site" }))
             }))
             .route("/api/leads", post(handlers::submit_lead))
             .route("/api/admin/login", post(handlers::admin_login))
-            .route("/api/admin/leads", get(handlers::admin_leads))
-            // axum 0.8：AppState 用 Extension 注入（serve 只接受 Router<()>）
-            .layer(Extension(state))
-            .with_operon_defaults();
-        Ok(router)
+            .route("/api/admin/leads", get(handlers::admin_leads));
+
+        // GitHub OAuth 登录（SSM 配 github_client_id/secret 时启用）
+        if let (Some(cid), Some(csec)) = (
+            state.config.secret("github_client_id").map(str::to_string),
+            state.config.secret("github_client_secret").map(str::to_string),
+        ) {
+            let base = std::env::var("OPERON_BASE_URL")
+                .unwrap_or_else(|_| "https://arch.sky-city.me".into());
+            let redirect = format!("{base}/api/auth/github/callback");
+            router = router.merge(github::router(Arc::new(github::GithubAuth::new(
+                cid, csec, redirect,
+            ))));
+            tracing::info!("GitHub OAuth 已启用");
+        }
+
+        // axum 0.8：AppState 用 Extension 注入（serve 只接受 Router<()>）
+        Ok(router.layer(Extension(state)).with_operon_defaults())
     })
     .await
 }
