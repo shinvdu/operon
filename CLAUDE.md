@@ -7,7 +7,7 @@ Rust + Lambda(Web Adapter) + axum 后端 + S3 静态前端，前后端分离，�
 ## 线上架构
 
 ```
-CloudFront (d3recyygcu2a3x.cloudfront.net)
+CloudFront (arch.sky-city.me / d3recyygcu2a3x.cloudfront.net)
  ├─ 默认    → S3 静态网站（frontend/index.html, admin.html，OAC + bucket policy）
  └─ /api/* → Lambda operon-dev-site（单函数）
               ├─ POST /api/leads          采购需求 → DynamoDB operon-dev-leads（公开）

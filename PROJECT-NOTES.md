@@ -3,18 +3,21 @@
 > 依据《一人公司》系列文章复现的端到端无服务器骨架。本文件记录部署信息、
 > 架构决策、性能实测数据与待办事项。技术细节与排坑见 `README.md`。
 
-## 一、部署信息（2026-08-14 实测）
+## 一、部署信息（2026-08-14 实测，当前为 Operon Cloud 公司网站）
 
 | 项 | 值 |
 |---|---|
 | AWS 账号 | 317618187345（IAM user `silas`，AdministratorAccess） |
-| 区域 | us-west-2 |
-| CloudFront | `https://d3recyygcu2a3x.cloudfront.net`（分布 ID `E1NYOKR46XYB9U`） |
-| Lambda Function URL | `https://jyyk44xtwr5oriprkrpnlkb56i0bcsny.lambda-url.us-west-2.on.aws/` |
-| Lambda 函数 | `operon-dev-api`（x86_64, 256MB, provided.al2023 + Web Adapter 层） |
-| DynamoDB | `operon-dev-users`（单表 pk/sk，按需计费） |
-| SSM 密钥 | `/operon/dev/jwt_seed`（SecureString，Ed25519 seed） |
+| 区域 | us-west-2（CloudFront 证书需 us-east-1） |
+| 网站 | **`https://arch.sky-city.me`**（自定义域名） |
+| 管理后台 | `https://arch.sky-city.me/admin.html` |
+| 回退域名 | `https://d3recyygcu2a3x.cloudfront.net`（分布 ID `E1NYOKR46XYB9U`） |
+| Lambda Function URL | `https://3a4fsjkdf3v4kjgd6ogw65be7y0bbuxi.lambda-url.us-west-2.on.aws/` |
+| Lambda 函数 | `operon-dev-site`（x86_64, 256MB, provided.al2023 + Web Adapter） |
+| DynamoDB | `operon-dev-leads`（采购需求，pk=`LEADS`/sk=时间戳，按需计费） |
+| S3 前端 | `operon-dev-frontend`（index.html + admin.html，OAC + bucket policy） |
 | S3 部署桶 | `operon-deploy-317618187345-us-west-2` |
+| SSM 密钥 | `/operon/dev/jwt_seed`、`/operon/dev/admin_password`（均 SecureString） |
 
 ## 二、关键架构决策（已验证）
 
@@ -66,14 +69,64 @@ DynamoDB / CloudFront / S3 / SSM        ≈ ~$0.12
 - [ ] Webhook 验证（Stripe/GitHub/HMAC）——可插拔 trait 已预留思路
 - [ ] SQS 异步 Worker（文章第五篇 slides-worker 模式）
 - [ ] 性能复测建议在美西区域就近执行，排除本机网络因素
+- [ ] leads 状态流转（new→contacted→closed）管理按钮
+- [ ] 自定义域名（如 operoncloud.com）+ ACM 证书
+- [ ] staging/prod 环境隔离部署
 
-## 六、相关命令
+## 六、Operon Cloud 公司网站（2026-08-14 上线）
+
+**业务**：磐云科技（Operon Cloud）——无服务器云应用专家（拟名，贴合 operon 定位）
+
+**用户流程**（全部浏览器实测通过）：
+1. 访客打开首页 → 填写采购需求表单 → `POST /api/leads` → DynamoDB
+2. 管理员打开 `/admin.html` → 登录（SSM 密码，常量时间比对）→ JWT → 查看需求列表
+
+**API 路由**（单 Lambda `apps/site`）：
+| 方法/路径 | 说明 | 认证 |
+|---|---|---|
+| `GET /health` | 健康检查 | 无 |
+| `POST /api/leads` | 提交采购需求（需 `x-amz-content-sha256`） | 无 |
+| `POST /api/admin/login` | 管理员登录（SSM 密码→JWT，8h 有效） | 无 |
+| `GET /api/admin/leads` | 需求列表（时间倒序） | JWT + `role=admin` |
+
+**管理员密码**：`REDACTED_ADMIN_PASSWORD=`
+（SSM `/operon/dev/admin_password`，部署时自动生成。修改：`aws ssm put-parameter --name /operon/dev/admin_password --type SecureString --value <新密码> --overwrite`）
+
+**实测结果**：浏览器真实填表提交"云上科技有限公司"需求已入库；管理员浏览器登录后看到 2 条需求（含时间/联系方式/需求/预算/状态）。
+
+**本次新增排坑**：
+- **S3 OAC 需要 bucket policy** 授信 CloudFront（`FrontendBucketPolicy`，否则 403 AccessDenied）
+- 前端 POST 用 `crypto.subtle.digest('SHA-256')` 计算 `x-amz-content-sha256`（Function URL 必需）
+
+## 六之补充、自定义域名 arch.sky-city.me（2026-08-14 上线）
+
+**最终方案**：Let's Encrypt（DNS-01 TXT 挑战）→ 导入 ACM → CloudFront 绑定。
+绕开了 NameSilo 的两条硬限制。
+
+**NameSilo 限制（重要，防止再踩）**：
+- CNAME 的 **rrvalue 拒绝以下划线开头** → ACM 的 `_xxx.acm-validations.aws` 验证值全部被拒（210）
+- **不支持 NS 记录**（只能 A/AAAA/CNAME/MX/TXT/SRV/CAA）→ Route53 子域委托失败
+- 支持 TXT（含下划线 host）→ 这是最终方案的突破口
+
+**实施步骤**：
+1. `acme.sh --issue --dns dns_namesilo -d arch.sky-city.me`（内置 NameSilo hook，TXT 自动加/删）
+2. 证书：`~/.acme.sh/arch.sky-city.me_ecc/`（自动续期 2026-10-13，cron 已装）
+3. **导入 ACM**：`boto3 acm.import_certificate(Certificate=leaf, PrivateKey=key, CertificateChain=ca.cer)`，region **us-east-1**
+   - ⚠️ **不要用 `aws acm import-certificate --certificate file://`**——AWS CLI 对 blob 参数有解析 bug（报"多证书"/Invalid base64）；用 boto3 直接传 bytes
+4. CloudFront：`Aliases=[arch.sky-city.me]` + `ViewerCertificate: AcmCertificateArn`（sni-only, TLSv1.2_2021）
+5. NameSilo 最终 CNAME：`arch → d3recyygcu2a3x.cloudfront.net`
+
+**已放弃的弯路**：ACM DNS 验证（NameSilo 拒下划线 CNAME）、Email 验证（arch 子域无 MX）、Route53 委托（NameSilo 无 NS）、IAM 证书（CloudFront 报证书无效；且 IamCertificateId 只收 ≤32 字符 ID）。
+
+## 七、相关命令
 
 ```bash
-# 部署
+# 部署（编译 site + 上传后端 + 上传前端 + CFN）
 cd infra && ./deploy.sh dev
 # 签发测试 JWT
 cargo run -q -p operon-cli -- token --seed "$(aws ssm get-parameter --name /operon/dev/jwt_seed --with-decryption --query Parameter.Value --output text)" --sub user-123 --email test@example.com
+# 查看网站 URL
+aws cloudformation describe-stacks --stack-name operon-dev --query "Stacks[0].Outputs[?OutputKey=='CloudFrontUrl'].OutputValue" --output text
 # 清理
 aws cloudformation delete-stack --stack-name operon-dev
 ```
