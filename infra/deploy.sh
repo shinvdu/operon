@@ -69,14 +69,24 @@ aws s3api put-object --bucket "$BUCKET" --key "$CODE_KEY" --body "$ZIP" \
 echo "      已上传 $CODE_KEY"
 
 step "[5/7] CloudFormation 部署 $STACK_NAME（先建前端桶，再传文件）"
+# 从独立参数文件 infra/params.json 读取参数（CodeKey 动态生成；可用环境变量覆盖单个参数）
+PARAM_OVERRIDES=$(python3 - "$CODE_KEY" <<'PYEOF'
+import json, os, sys
+code_key = sys.argv[1]
+p = json.load(open('infra/params.json'))
+p['CodeKey'] = code_key
+# 环境变量覆盖（可选）：OPERON_PROJECT / OPERON_ENV / OPERON_DOMAIN / ACM_ARN
+for k, env in {'Project':'OPERON_PROJECT','Environment':'OPERON_ENV','DomainName':'OPERON_DOMAIN','AcmCertificateArn':'ACM_ARN'}.items():
+    if os.environ.get(env):
+        p[k] = os.environ[env]
+for k, v in p.items():
+    print(f"{k}={v}")
+PYEOF
+)
 aws cloudformation deploy \
   --stack-name "$STACK_NAME" \
   --template-file infra/template.yaml \
-  --parameter-overrides \
-      Project="$PROJECT" \
-      Environment="$ENV" \
-      CodeBucket="$BUCKET" \
-      CodeKey="$CODE_KEY" \
+  --parameter-overrides $PARAM_OVERRIDES \
   --capabilities CAPABILITY_NAMED_IAM \
   --no-fail-on-empty-changeset
 

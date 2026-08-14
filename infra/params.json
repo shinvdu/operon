@@ -1,0 +1,10 @@
+{
+  "Project": "operon",
+  "Environment": "dev",
+  "LambdaArchitecture": "x86_64",
+  "LambdaMemoryMB": "256",
+  "CodeBucket": "operon-deploy-317618187345-us-west-2",
+  "WebAdapterLayerArn": "arn:aws:lambda:us-west-2:753240598075:layer:LambdaAdapterLayerX86:28",
+  "DomainName": "arch.sky-city.me",
+  "AcmCertificateArn": "arn:aws:acm:us-east-1:317618187345:certificate/e1ec7bd5-a259-400c-b0c0-bd6043dc807a"
+}
