@@ -12,9 +12,8 @@
 # 代理（关键：上传/访问走代理，直连 50KB/s 极慢）
 source ~/proxy.sh
 
-# 凭证（测试账号，可 export 或写进脚本）
-export AWS_ACCESS_KEY_ID="REDACTED_AWS_ACCESS_KEY"
-export AWS_SECRET_ACCESS_KEY="REDACTED_AWS_SECRET_KEY"
+# 凭证从项目根 .env 读取（.env 不入库，见 .env.example），或 export 环境变量
+# 示例：cp .env.example .env 并填入真实凭证
 export AWS_DEFAULT_REGION="us-west-2"          # 主区域（Lambda/DynamoDB/S3/CFN）
 
 # 验证凭证

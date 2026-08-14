@@ -8,8 +8,14 @@ set -euo pipefail
 
 # ---- 环境（代理 + 凭证） ----
 source ~/proxy.sh
-export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-REDACTED_AWS_ACCESS_KEY}"
-export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-REDACTED_AWS_SECRET_KEY}"
+
+# 凭证从项目根 .env（已被 .gitignore 排除，不入库）或环境变量读取
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+if [ -f "$ROOT/.env" ]; then
+  set -a; source "$ROOT/.env"; set +a
+fi
+export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:?AWS_ACCESS_KEY_ID 未设置：复制 .env.example 为 .env 并填入凭证}"
+export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:?AWS_SECRET_ACCESS_KEY 未设置}"
 export AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-us-west-2}"
 
 PROJECT="${OPERON_PROJECT:-operon}"

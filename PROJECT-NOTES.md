@@ -89,8 +89,9 @@ DynamoDB / CloudFront / S3 / SSM        ≈ ~$0.12
 | `POST /api/admin/login` | 管理员登录（SSM 密码→JWT，8h 有效） | 无 |
 | `GET /api/admin/leads` | 需求列表（时间倒序） | JWT + `role=admin` |
 
-**管理员密码**：`REDACTED_ADMIN_PASSWORD=`
-（SSM `/operon/dev/admin_password`，部署时自动生成。修改：`aws ssm put-parameter --name /operon/dev/admin_password --type SecureString --value <新密码> --overwrite`）
+**管理员密码**：存于 SSM `/operon/dev/admin_password`（部署时自动生成，明文不入库）。
+查看：`aws ssm get-parameter --name /operon/dev/admin_password --with-decryption --query Parameter.Value --output text`
+修改：`aws ssm put-parameter --name /operon/dev/admin_password --type SecureString --value <新密码> --overwrite`
 
 **实测结果**：浏览器真实填表提交"云上科技有限公司"需求已入库；管理员浏览器登录后看到 2 条需求（含时间/联系方式/需求/预算/状态）。
 
