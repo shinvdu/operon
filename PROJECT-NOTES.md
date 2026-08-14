@@ -70,7 +70,7 @@ DynamoDB / CloudFront / S3 / SSM        ≈ ~$0.12
 - [ ] SQS 异步 Worker（文章第五篇 slides-worker 模式）
 - [ ] 性能复测建议在美西区域就近执行，排除本机网络因素
 - [ ] leads 状态流转（new→contacted→closed）管理按钮
-- [ ] 自定义域名（如 operoncloud.com）+ ACM 证书
+- [x] 自定义域名 arch.sky-city.me + 证书自动续期（2026-08-14 完成）
 - [ ] staging/prod 环境隔离部署
 
 ## 六、Operon Cloud 公司网站（2026-08-14 上线）
@@ -117,6 +117,33 @@ DynamoDB / CloudFront / S3 / SSM        ≈ ~$0.12
 5. NameSilo 最终 CNAME：`arch → d3recyygcu2a3x.cloudfront.net`
 
 **已放弃的弯路**：ACM DNS 验证（NameSilo 拒下划线 CNAME）、Email 验证（arch 子域无 MX）、Route53 委托（NameSilo 无 NS）、IAM 证书（CloudFront 报证书无效；且 IamCertificateId 只收 ≤32 字符 ID）。
+
+## 六之补充2、证书自动续期（2026-08-14 配置完成，闭环已验证）
+
+**架构**：acme.sh cron（每天 4 次检查）→ 60 天自动续期 → `reloadcmd` 自动执行 `infra/renew-acm.sh`
+
+**renew-acm.sh 流程**（已实际跑通验证）：
+1. 导入 ACM（us-east-1，boto3 直接传 bytes）→ 新 ARN
+2. 更新 CloudFront `ViewerCertificate`（boto3 `update_distribution`，秒级生效）
+3. 同步 CFN 栈参数 `AcmCertificateArn`（避免下次 `cloudformation deploy` 回滚证书）
+4. 清理旧证书：历史文件 `~/.acme.sh/<domain>_renew_history` 跟踪 ARN，只留最新
+
+**当前证书**：`arn:aws:acm:us-east-1:317618187345:certificate/e1ec7bd5-...`（2026-11 到期，到期前自动续期切换）
+
+**组件位置**：
+| 组件 | 位置/配置 |
+|---|---|
+| acme.sh cron | `57 1,7,13,19 * * * ~/.acme.sh/acme.sh --cron`（每天 4 次） |
+| reloadcmd | `~/.acme.sh/arch.sky-city.me_ecc/arch.sky-city.me.conf` 的 `Le_ReloadCmd`（base64 存脚本路径） |
+| 续期脚本 | `infra/renew-acm.sh`（需 boto3 + 走代理 + 凭证） |
+| SSM 记录 | `/operon/dev/acm_cert_arn`（当前在用证书 ARN） |
+
+**新增排坑**：
+- **`list-certificates` 对 imported 证书返回空**（ACM 怪癖）→ 清理改用历史文件方案，别用 list 找证书
+- S3 bucket policy：**手动 put + CFN 模板同时管理会冲突**（"policy already exists"）→ 统一由 CFN 管理
+- 脚本里 aws CLI 命令要 `export AWS_DEFAULT_REGION`（boto3 用显式 region，CLI 用默认，易漏）
+
+**手动触发续期**：`acme.sh --renew -d arch.sky-city.me --force`（会自动走 renew-acm.sh）
 
 ## 七、相关命令
 
