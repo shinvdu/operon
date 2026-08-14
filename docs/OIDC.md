@@ -174,5 +174,6 @@ curl -s -b ck.txt "$CALLBACK"                                           # → JS
 - 演示：`apps/example/src/main.rs`（`MyAuthHandler` + `build_oidc_router`）
 - 测试：`infra/mock_idp.py`（本地模拟 IdP）
 - 状态：
-  - OIDC（openidconnect）：**已实现 + 本地 E2E 验证**（REQUIREMENTS.md FR-3.3 ✅）
+  - OIDC（openidconnect）：**已上线 + 线上验证**（Google，xie.tianbao44@gmail.com 登录成功）
   - GitHub OAuth：**已上线 + 线上验证**（shinvdu 登录成功，JWT 校验通过）
+  - 部署：SSM 配 `google_client_id/secret` + `github_client_id/secret` 时启用（SecureString，明文不入仓库）
