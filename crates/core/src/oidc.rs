@@ -408,7 +408,8 @@ async fn callback(
         // 浏览器登录场景：返回 HTML 把 token 存到 localStorage 并跳转（而非裸 JSON）
         TokenDelivery::Json => {
             let token = payload.get("token").and_then(|t| t.as_str()).unwrap_or("");
-            let sub = payload.get("sub").cloned().unwrap_or(serde_json::Value::Null);
+            // operon_user 存 JSON 对象（{"sub": ...}），前端 JSON.parse 后取 .sub
+            let user_obj = serde_json::json!({ "sub": payload.get("sub") }).to_string();
             let html = format!(
                 r#"<!doctype html><html><meta charset="utf-8"><script>
                 localStorage.setItem('operon_token', '{}');
@@ -416,7 +417,7 @@ async fn callback(
                 location.href = '/my.html';
                 </script></html>"#,
                 token.replace('\\', "\\\\").replace('\'', "\\'"),
-                sub.to_string().replace('\\', "\\\\").replace('\'', "\\'")
+                user_obj.replace('\\', "\\\\").replace('\'', "\\'")
             );
             Ok(([(header::CONTENT_TYPE, "text/html")], html).into_response())
         }

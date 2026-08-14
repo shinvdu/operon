@@ -99,7 +99,7 @@ async function loadLeads() {
   document.getElementById('loginView').classList.add('hidden');
   document.getElementById('panelView').classList.remove('hidden');
   document.getElementById('topRight').innerHTML = '<a href="/" style="color:var(--accent);font-size:.9rem">返回首页</a>';
-  document.getElementById('userLabel').textContent = user ? '已登录' : '';
+  document.getElementById('userLabel').textContent = user ? `已登录：${user.sub}` : '';
 
   try {
     const res = await fetch('/api/my/leads', { headers: { 'X-Authorization': `Bearer ${token}` } });

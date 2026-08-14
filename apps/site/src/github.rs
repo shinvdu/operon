@@ -154,6 +154,8 @@ async fn callback(
     };
     let token = state.jwt.sign(&claims)?;
     // 浏览器登录场景：HTML 存 token 到 localStorage 并跳转 /my.html
+    // operon_user 存 JSON 对象（{"sub": ...}），前端 JSON.parse 后取 .sub
+    let user_obj = format!("{{\"sub\":{}}}", user.id);
     let html = format!(
         r#"<!doctype html><html><meta charset="utf-8"><script>
         localStorage.setItem('operon_token', '{}');
@@ -161,7 +163,7 @@ async fn callback(
         location.href = '/my.html';
         </script></html>"#,
         token.replace('\\', "\\\\").replace('\'', "\\'"),
-        user.id
+        user_obj
     );
     Ok(([(header::CONTENT_TYPE, "text/html")], html).into_response())
 }
