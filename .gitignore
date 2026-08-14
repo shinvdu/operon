@@ -1,0 +1,12 @@
+# 编译产物（本机曾膨胀到 4.2G，绝不入库）
+/target
+
+# 编辑器 / 系统
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# 本地环境变量 / 密钥
+.env
+*.local
