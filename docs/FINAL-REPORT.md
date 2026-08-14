@@ -64,6 +64,13 @@
 - **成本告警**：AWS Budgets（$10/月）+ SNS → 163 邮箱，超过 $8.5/$10 发邮件
 - **验证**：续期闭环实际跑通、测试告警邮件成功送达
 
+### 阶段五：能力补全与质量保障
+- **CLI 完善**：`init` / `dev` / `deploy` / `logs` 一条龙（脚手架/本地运行/部署/日志）
+- **后端模块化**：apps/site 拆为 main/models/handlers（对应文章三层架构）
+- **单元测试**：26 个（JWT/错误映射/模型/认证/API Key/Webhook/S3/SQS），约定新功能必须带测试
+- **框架能力补全**：API Key 验证、Webhook 验证器、S3 封装（预签名 URL）、SQS Worker 运行时
+- **验证**：`cargo test` 全绿，核心链路回归通过
+
 ---
 
 ## 三、最终架构
@@ -164,7 +171,8 @@ CloudFront  https://arch.sky-city.me
 | 证书续期 | acme.sh cron（每天 4 次检查，60 天续期）→ `renew-acm.sh` 自动导入/切换/清理 | ✅ 闭环验证 |
 | 成本告警 | AWS Budgets $10/月 → SNS → 163 邮箱 | ✅ 测试邮件送达 |
 | 一键部署 | `infra/deploy.sh`（编译→打包→上传前后端→CFN） | ✅ |
-| 文档 | README / CLAUDE / PROJECT-NOTES / REQUIREMENTS / DESIGN / API / COST / FINAL-REPORT | ✅ |
+| 质量保障 | `cargo test` 26 个测试全绿（CLAUDE.md 约定新功能必带测试） | ✅ |
+| 文档 | README / CLAUDE / PROJECT-NOTES / REQUIREMENTS / DESIGN / API / COST / AWS-OPERATIONS / FINAL-REPORT | ✅ |
 
 ---
 
@@ -187,6 +195,11 @@ CloudFront  https://arch.sky-city.me
 ## 九、Git 版本记录
 
 ```
+7a4c950 feat(core): 补齐 API Key / Webhook / S3 / SQS Worker 框架能力
+42119ab test(core): 添加核心单元测试
+2e8cdf0 refactor(site): 后端模块化拆分
+9a2196a feat(cli): 实现 init/dev/deploy/logs 命令
+9c70099 chore(infra): 凭证移入 .env 环境变量
 bce948d feat(infra): 证书自动续期脚本（Let's Encrypt → ACM → CloudFront 全自动）
 ca21744 feat(site): 绑定自定义域名 arch.sky-city.me（Let's Encrypt + ACM）
 47eb2f0 feat(site): Operon Cloud 公司网站上线（前后端分离）
@@ -197,11 +210,12 @@ b6872fd feat(operon): 搭建一人公司无服务器框架端到端骨架
 
 ## 十、后续建议
 
+- [ ] OIDC 登录（剩余最重的认证模块：PKCE + 加密 cookie + JWKS）
+- [ ] 基础设施 npm 包抽象（CFN 模板 → 可复用 npm 包，文章「600 行到 80 行」）
+- [ ] 边缘认证（CloudFront Function 纵深防御，第一层边缘验 JWT）
 - [ ] Lambda 内存 256MB → 128MB（实测仅用 36MB，成本再降一半）
 - [ ] ARM64 切换（交叉编译，Lambda 省 ~20%）
 - [ ] leads 状态流转（new→contacted→closed）管理界面
-- [ ] OIDC 登录 / Webhook / SQS Worker（框架未做模块）
-- [ ] 前端构建链（若需更复杂交互）+ 前端缓存策略优化
 - [ ] staging/prod 环境隔离部署
 
 ---
@@ -217,4 +231,5 @@ b6872fd feat(operon): 搭建一人公司无服务器框架端到端骨架
 | `docs/DESIGN.md` | 技术设计（ADR） |
 | `docs/API.md` | 接口文档（curl 示例） |
 | `docs/COST.md` | 成本核算 |
+| `docs/AWS-OPERATIONS.md` | AWS CLI 操作手册（证书/创建/更新/测试/告警/清理） |
 | `docs/FINAL-REPORT.md` | 本报告 |
