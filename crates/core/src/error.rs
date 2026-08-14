@@ -80,3 +80,29 @@ impl IntoResponse for AppError {
             .into_response()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use http_body_util::BodyExt;
+
+    #[test]
+    fn status_code_mapping() {
+        assert_eq!(AppError::Unauthorized("x".into()).status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(AppError::Forbidden("x".into()).status(), StatusCode::FORBIDDEN);
+        assert_eq!(AppError::NotFound("x".into()).status(), StatusCode::NOT_FOUND);
+        assert_eq!(AppError::BadRequest("x".into()).status(), StatusCode::BAD_REQUEST);
+        assert_eq!(AppError::Conflict("x".into()).status(), StatusCode::CONFLICT);
+        assert_eq!(AppError::Internal("x".into()).status(), StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    #[tokio::test]
+    async fn json_error_format() {
+        let resp = AppError::NotFound("用户不存在".into()).into_response();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["error"]["code"], "NOT_FOUND");
+        assert_eq!(json["error"]["message"], "用户不存在");
+    }
+}

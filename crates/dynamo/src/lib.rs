@@ -128,3 +128,16 @@ impl DynamoClient {
         Ok(items)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use operon_core::AppError;
+
+    #[test]
+    fn dynamo_error_maps_to_app_error() {
+        assert!(matches!(AppError::from(DynamoError::NotFound("x".into())), AppError::NotFound(_)));
+        assert!(matches!(AppError::from(DynamoError::ConditionalCheckFailed), AppError::Conflict(_)));
+        assert!(matches!(AppError::from(DynamoError::Aws("e".into())), AppError::Internal(_)));
+    }
+}

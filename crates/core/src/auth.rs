@@ -118,6 +118,82 @@ impl Jwt {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_jwt() -> Jwt {
+        Jwt::from_seed(&[7u8; 32]).expect("32 bytes seed valid")
+    }
+
+    fn base_claims() -> JwtClaims {
+        JwtClaims {
+            sub: "user-1".into(),
+            email: Some("a@b.com".into()),
+            iat: unix_now(),
+            exp: unix_now() + 3600,
+            extra: Default::default(),
+        }
+    }
+
+    #[test]
+    fn sign_verify_roundtrip() {
+        let jwt = test_jwt();
+        let token = jwt.sign(&base_claims()).unwrap();
+        let v = jwt.verify(&token).unwrap();
+        assert_eq!(v.sub, "user-1");
+        assert_eq!(v.email.as_deref(), Some("a@b.com"));
+    }
+
+    #[test]
+    fn tampered_payload_rejected() {
+        let jwt = test_jwt();
+        let token = jwt.sign(&base_claims()).unwrap();
+        // 篡改 payload 段（第二段）
+        let parts: Vec<&str> = token.split('.').collect();
+        let mut bad_payload = parts[1].to_string();
+        bad_payload.replace_range(0..1, "x");
+        let bad = format!("{}.{}.{}", parts[0], bad_payload, parts[2]);
+        assert!(matches!(jwt.verify(&bad), Err(AppError::Unauthorized(_))));
+    }
+
+    #[test]
+    fn tampered_signature_rejected() {
+        let jwt = test_jwt();
+        let token = jwt.sign(&base_claims()).unwrap();
+        let parts: Vec<&str> = token.split('.').collect();
+        let mut bad_sig = parts[2].to_string();
+        bad_sig.replace_range(0..1, "x");
+        let bad = format!("{}.{}.{}", parts[0], parts[1], bad_sig);
+        assert!(matches!(jwt.verify(&bad), Err(AppError::Unauthorized(_))));
+    }
+
+    #[test]
+    fn expired_token_rejected() {
+        let jwt = test_jwt();
+        let mut claims = base_claims();
+        claims.exp = unix_now() - 1; // 已过期
+        let token = jwt.sign(&claims).unwrap();
+        assert!(matches!(jwt.verify(&token), Err(AppError::Unauthorized(e)) if e.contains("expired")));
+    }
+
+    #[test]
+    fn malformed_token_rejected() {
+        let jwt = test_jwt();
+        assert!(matches!(jwt.verify("not.a.jwt"), Err(AppError::Unauthorized(_))));
+        assert!(matches!(jwt.verify("onlyone"), Err(AppError::Unauthorized(_))));
+    }
+
+    #[test]
+    fn wrong_key_rejected() {
+        let a = test_jwt();
+        let b = Jwt::from_seed(&[8u8; 32]).unwrap();
+        let token = a.sign(&base_claims()).unwrap();
+        // 用不同密钥验证应失败
+        assert!(matches!(b.verify(&token), Err(AppError::Unauthorized(_))));
+    }
+}
+
 /// axum 提取器：从 `Authorization: Bearer <jwt>` 自动验证并注入声明。
 pub struct JwtAuth(pub JwtClaims);
 

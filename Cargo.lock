@@ -1693,13 +1693,16 @@ name = "operon-site"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "aws-config",
  "axum",
+ "http-body-util",
  "operon-core",
  "operon-dynamo",
  "serde",
  "serde_json",
  "subtle",
  "tokio",
+ "tower",
  "tracing",
  "uuid",
 ]
