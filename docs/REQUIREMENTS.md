@@ -168,7 +168,7 @@
 - [✅] CLI 基础：gen-seed / token / dev-seed（FR-8 部分）
 
 ### Should（应该，框架的核心竞争力）
-- [⬜] OIDC 登录（PKCE + 加密 cookie + JWKS 端点）（FR-3.3, 3.4）
+- [✅] OIDC 登录（基于 openidconnect：PKCE + 加密 cookie + JWKS 端点）（FR-3.3, 3.4）
 - [✅] API Key 常量时间验证（FR-3.2）
 - [✅] SQS Worker 运行时 `run_sqs_with_setup`（FR-1.4）
 - [✅] Webhook 验证器（Stripe/GitHub/HMAC）（FR-7）

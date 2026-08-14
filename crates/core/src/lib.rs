@@ -6,12 +6,14 @@
 pub mod auth;
 pub mod config;
 pub mod error;
+pub mod oidc;
 pub mod server;
 pub mod sqs;
 
 pub use auth::{resolve_jwt_seed, unix_now, ApiKeyAuth, Jwt, JwtAuth, JwtClaims};
 pub use config::{AppConfig, ConfigLoader};
 pub use error::AppError;
+pub use oidc::{OidcAuthHandler, OidcProviderConfig, OidcRouter, OidcUserInfo, TokenDelivery};
 pub use server::run_with_setup;
 pub use sqs::{run_sqs_with_setup, SqsHandler};
 
@@ -71,6 +73,7 @@ where
 pub mod prelude {
     pub use crate::{
         AppConfig, AppError, AppState, ApiKeyAuth, Jwt, JwtAuth, JwtClaims,
-        OperonRouterExt, SqsHandler, run_sqs_with_setup, run_with_setup,
+        OidcAuthHandler, OidcProviderConfig, OidcRouter, OidcUserInfo,
+        OperonRouterExt, SqsHandler, TokenDelivery, run_sqs_with_setup, run_with_setup,
     };
 }

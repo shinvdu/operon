@@ -82,6 +82,7 @@ crates/
 - **Webhook**（`operon-webhook`）：实现 `WebhookVerifier` 或用 `HmacVerifier::stripe()/github()`，作为中间件在业务前验签
 - **S3**（`operon-s3`）：`S3Client::new(&aws_config, bucket)`，`put_object/get_object` + `presign_get/put` 预签名 URL
 - **SQS**（core `run_sqs_with_setup`）：`run_sqs_with_setup(queue_url, |state| async { Ok(handler) }).await`，实现 `SqsHandler`；处理失败不删消息（可见性重试）
+- **OIDC**（core `OidcRouter`）：`OidcRouter::builder().base_url(...).cookie_key(...).provider(cfg, handler).build().await?`，生成 `/.well-known/jwks.json` + `/api/auth/{provider}` + `/callback`；基于 **openidconnect**（官方认证），state 用 AES-GCM 加密 cookie
 
 ## 测试约定（铁律：新增功能必须带测试）
 
@@ -110,6 +111,6 @@ crates/
 
 ## 未做 / 后续
 
-- OIDC 登录（PKCE + 加密 cookie + JWKS）、基础设施 npm 包、边缘认证（CloudFront Function）未实现
+- 基础设施 npm 包、边缘认证（CloudFront Function）未实现
 - ARM64 切换（省 ~20%）、Lambda 内存 256→128MB（实测用 36MB）
 - leads 状态流转（new → contacted → closed）未接管理界面按钮

@@ -13,7 +13,6 @@ tracing-subscriber.workspace = true
 tower-http.workspace = true
 tower.workspace = true
 http-body-util.workspace = true
-jsonwebtoken.workspace = true
 rand.workspace = true
 sha2.workspace = true
 hex.workspace = true
@@ -29,6 +28,8 @@ base64 = "0.23.1"
 async-trait = "0.1.92"
 subtle = "2"
 aws-sdk-sqs = "1.105.0"
+aes-gcm = "0.10"
+openidconnect = { version = "3", default-features = false, features = ["reqwest", "rustls-tls"] }
 
 [dev-dependencies]
 tower = { workspace = true, features = ["util"] }
