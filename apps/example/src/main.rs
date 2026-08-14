@@ -9,11 +9,12 @@
 //! - `GET  /users`     列出所有用户（DynamoDB 查询）
 //! - `GET  /me`        当前用户（JWT 保护）
 
-use axum::extract::State;
+use axum::extract::Extension;
 use axum::http::StatusCode;
 use axum::routing::get;
 use axum::{Json, Router};
 use operon_core::prelude::*;
+use operon_core::{OidcAuthHandler, OidcProviderConfig, OidcRouter, OidcUserInfo, TokenDelivery};
 use operon_dynamo::DynamoClient;
 use serde::{Deserialize, Serialize};
 
@@ -44,15 +45,64 @@ struct UserOut {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     run_with_setup(|state| async move {
-        let router = Router::new()
+        let mut router = Router::new()
             .route("/health", get(health))
             .route("/users", get(list_users).post(create_user))
-            .route("/me", get(get_me))
-            .with_state(state)
-            .with_operon_defaults();
-        Ok(router)
+            .route("/me", get(get_me));
+        // 可选：挂 OIDC 登录（设 OPERON_OIDC_ISSUER 时启用，用于本地测试）
+        if std::env::var("OPERON_OIDC_ISSUER").is_ok() {
+            router = router.merge(build_oidc_router().await?);
+        }
+        // axum 0.8：AppState 用 Extension 注入（serve 只接受 Router<()>）
+        Ok(router.layer(Extension(state)).with_operon_defaults())
     })
     .await
+}
+
+/// OIDC 演示 handler：认证成功后签发自有 JWT（TokenDelivery::Json）。
+struct MyAuthHandler;
+
+#[async_trait::async_trait]
+impl OidcAuthHandler for MyAuthHandler {
+    async fn on_authenticated(
+        &self,
+        user_info: OidcUserInfo,
+        state: &AppState,
+    ) -> Result<(serde_json::Value, TokenDelivery), AppError> {
+        let now = operon_core::unix_now();
+        let claims = JwtClaims {
+            sub: user_info.sub.clone(),
+            email: user_info.email.clone(),
+            iat: now,
+            exp: now + 86400,
+            extra: Default::default(),
+        };
+        let token = state.jwt.sign(&claims)?;
+        Ok((
+            serde_json::json!({ "token": token, "sub": user_info.sub }),
+            TokenDelivery::Json,
+        ))
+    }
+}
+
+/// 构建 OIDC 路由（provider 名固定 mock，配置来自环境变量）。
+async fn build_oidc_router() -> anyhow::Result<Router> {
+    let cfg = OidcProviderConfig {
+        name: "mock".into(),
+        issuer_url: std::env::var("OPERON_OIDC_ISSUER")?,
+        client_id: std::env::var("OPERON_OIDC_CLIENT_ID").unwrap_or_else(|_| "test-client".into()),
+        client_secret: std::env::var("OPERON_OIDC_CLIENT_SECRET")
+            .unwrap_or_else(|_| "test-secret".into()),
+        scopes: vec!["openid".into(), "email".into(), "profile".into()],
+    };
+    let base_url = std::env::var("OPERON_BASE_URL").unwrap_or_else(|_| "http://127.0.0.1:8080".into());
+    let oidc = OidcRouter::builder()
+        .base_url(base_url)
+        .cookie_key([7u8; 32]) // dev 固定 cookie key
+        .provider(cfg, MyAuthHandler)
+        .build()
+        .await?;
+    Ok(oidc.into_router())
 }
 
 async fn health() -> Json<serde_json::Value> {
@@ -68,7 +118,7 @@ fn db(state: &AppState) -> DynamoClient {
 }
 
 async fn list_users(
-    State(state): State<AppState>,
+    Extension(state): Extension<AppState>,
 ) -> Result<Json<Vec<UserOut>>, AppError> {
     let users: Vec<User> = db(&state).query("USERS").await?;
     Ok(Json(
@@ -84,7 +134,7 @@ async fn list_users(
 }
 
 async fn create_user(
-    State(state): State<AppState>,
+    Extension(state): Extension<AppState>,
     Json(body): Json<CreateUser>,
 ) -> Result<(StatusCode, Json<UserOut>), AppError> {
     let user_id = uuid::Uuid::new_v4().to_string();

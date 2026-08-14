@@ -14,7 +14,7 @@ use std::sync::Arc;
 
 use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::Aes256Gcm;
-use axum::extract::{Extension, Query, State};
+use axum::extract::{Extension, Query};
 use axum::http::{header, HeaderMap, HeaderValue};
 use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::get;
@@ -145,8 +145,8 @@ impl OidcRouter {
         OidcRouterBuilder::default()
     }
 
-    /// 把 OIDC 路由合并进主 Router（AppState 需含 Jwt 用于 JWKS 端点）。
-    pub fn into_router(self) -> Router<AppState> {
+    /// 把 OIDC 路由合并进主 Router（AppState 通过 Extension 注入）。
+    pub fn into_router(self) -> Router {
         let prefix = self.route_prefix.clone();
         let mut router = Router::new().route("/.well-known/jwks.json", get(jwks_handler));
         for p in &self.providers {
@@ -247,7 +247,7 @@ impl OidcRouterBuilder {
 // ---------- 路由 handler ----------
 
 /// JWKS 端点：输出框架 Ed25519 公钥（供第三方验证框架签发的 JWT）。
-async fn jwks_handler(State(state): State<AppState>) -> Json<serde_json::Value> {
+async fn jwks_handler(Extension(state): Extension<AppState>) -> Json<serde_json::Value> {
     let x = URL_SAFE_NO_PAD.encode(state.jwt.verifying_key_bytes());
     Json(serde_json::json!({
         "keys": [{
@@ -323,7 +323,7 @@ struct CallbackCtx {
 
 async fn callback_route(
     Extension(ctx): Extension<Arc<CallbackCtx>>,
-    State(state): State<AppState>,
+    Extension(state): Extension<AppState>,
     Query(q): Query<CallbackQuery>,
     headers: HeaderMap,
 ) -> Result<Response, AppError> {
@@ -366,7 +366,7 @@ async fn callback(
         .set_pkce_verifier(PkceCodeVerifier::new(state_data.pkce_verifier))
         .request_async(async_http_client)
         .await
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+        .map_err(|e| AppError::Internal(format!("token exchange failed: {e:?}")))?;
     let id_token = token_resp
         .id_token()
         .ok_or_else(|| AppError::BadRequest("no id_token in token response".into()))?;

@@ -15,6 +15,9 @@ use crate::config::ConfigLoader;
 use crate::AppState;
 
 /// 一行启动：`operon::run_with_setup(|state| async move { Ok(router(state)) }).await`
+///
+/// 注意：axum 0.8 的 serve 只接受 `Router<()>`，应用应把 AppState 通过
+/// **`Extension(state)`** 注入（而非 `with_state`），handlers 用 `Extension<AppState>` 提取。
 pub async fn run_with_setup<F, Fut>(setup: F) -> anyhow::Result<()>
 where
     F: FnOnce(AppState) -> Fut,

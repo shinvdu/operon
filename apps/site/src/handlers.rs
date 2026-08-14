@@ -1,7 +1,7 @@
 //! 路由处理器：认证 + 业务逻辑编排。
 //! 对应文章三层架构的「路由层」：极薄，只做提取认证、解析参数、调数据层。
 
-use axum::extract::State;
+use axum::extract::Extension;
 use axum::http::StatusCode;
 use axum::Json;
 use operon_core::prelude::*;
@@ -17,7 +17,7 @@ fn leads_table(state: &AppState) -> String {
 
 /// POST /api/leads —— 采购需求提交（公开）→ DynamoDB。
 pub async fn submit_lead(
-    State(state): State<AppState>,
+    Extension(state): Extension<AppState>,
     Json(body): Json<LeadRequest>,
 ) -> Result<(StatusCode, Json<LeadOut>), AppError> {
     let now = operon_core::unix_now();
@@ -43,7 +43,7 @@ pub async fn submit_lead(
 
 /// POST /api/admin/login —— 管理员登录（SSM 密码，常量时间比对）→ 签发 JWT。
 pub async fn admin_login(
-    State(state): State<AppState>,
+    Extension(state): Extension<AppState>,
     Json(body): Json<LoginRequest>,
 ) -> Result<Json<LoginResponse>, AppError> {
     if body.username != "admin" {
@@ -80,7 +80,7 @@ pub async fn admin_login(
 
 /// GET /api/admin/leads —— 需求列表（JWT + admin role 保护，时间倒序）。
 pub async fn admin_leads(
-    State(state): State<AppState>,
+    Extension(state): Extension<AppState>,
     JwtAuth(claims): JwtAuth,
 ) -> Result<Json<Vec<LeadOut>>, AppError> {
     let is_admin = claims
@@ -135,7 +135,7 @@ mod tests {
         Router::new()
             .route("/api/admin/login", axum::routing::post(admin_login))
             .route("/api/admin/leads", axum::routing::get(admin_leads))
-            .with_state(test_state().await)
+            .layer(Extension(test_state().await))
     }
 
     async fn post_json(uri: &str, body: &str) -> axum::response::Response {

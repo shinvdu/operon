@@ -14,6 +14,7 @@
 mod handlers;
 mod models;
 
+use axum::extract::Extension;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use operon_core::prelude::*;
@@ -28,7 +29,8 @@ async fn main() -> anyhow::Result<()> {
             .route("/api/leads", post(handlers::submit_lead))
             .route("/api/admin/login", post(handlers::admin_login))
             .route("/api/admin/leads", get(handlers::admin_leads))
-            .with_state(state)
+            // axum 0.8：AppState 用 Extension 注入（serve 只接受 Router<()>）
+            .layer(Extension(state))
             .with_operon_defaults();
         Ok(router)
     })

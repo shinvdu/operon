@@ -8,7 +8,7 @@
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use axum::extract::{FromRef, FromRequestParts};
+use axum::extract::{FromRef, FromRequestParts, Extension};
 use axum::http::header::AUTHORIZATION;
 use axum::http::request::Parts;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
@@ -19,6 +19,7 @@ use subtle::ConstantTimeEq;
 
 use crate::config::AppConfig;
 use crate::error::AppError;
+use crate::AppState;
 
 /// JWT 声明。`sub` 是我们自己的 UUID（非第三方 provider ID），
 /// 对应文章第五篇「用户 ID 映射」的决策：身份标识与身份提供商解耦。
@@ -197,6 +198,7 @@ mod tests {
     #[tokio::test]
     async fn api_key_auth_valid_and_invalid() {
         use axum::body::Body;
+        use axum::extract::Extension;
         use axum::http::Request;
         use axum::routing::get;
         use axum::Router;
@@ -213,9 +215,18 @@ mod tests {
             secrets,
             dev_mode: true,
         };
+        let aws_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
+            .region("us-west-2")
+            .load()
+            .await;
+        let state = AppState {
+            config,
+            jwt: Jwt::from_seed(&[7u8; 32]).unwrap(),
+            aws_config,
+        };
         let app = Router::new()
             .route("/protected", get(|_: ApiKeyAuth| async { "ok" }))
-            .with_state(config);
+            .layer(Extension(state));
 
         // 正确 key → 200
         let res = app
@@ -257,14 +268,15 @@ mod tests {
 /// axum 提取器：从 `Authorization: Bearer <jwt>` 自动验证并注入声明。
 pub struct JwtAuth(pub JwtClaims);
 
-impl<S> FromRequestParts<S> for JwtAuth
-where
-    S: Send + Sync,
-    Jwt: axum::extract::FromRef<S>,
-{
+impl FromRequestParts<()> for JwtAuth {
     type Rejection = AppError;
 
-    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(parts: &mut Parts, _state: &()) -> Result<Self, Self::Rejection> {
+        // AppState 通过 Extension 注入（axum 0.8 的 serve 只接受 Router<()>）
+        let state = Extension::<AppState>::from_request_parts(parts, _state)
+            .await
+            .map_err(|e| AppError::Internal(e.to_string()))?
+            .0;
         // 优先读 X-Authorization：CloudFront OAC 会占用标准的 Authorization
         // header（换成 SigV4 签名），因此业务 JWT 走 X-Authorization。
         // 对应文章 4.2 节「使用 OAC 的代价是 Authorization header 被占用」。
@@ -277,8 +289,7 @@ where
         let token = auth
             .strip_prefix("Bearer ")
             .ok_or_else(|| AppError::Unauthorized("expected 'Bearer <token>'".into()))?;
-        let jwt = Jwt::from_ref(_state);
-        let claims = jwt.verify(token)?;
+        let claims = state.jwt.verify(token)?;
         Ok(JwtAuth(claims))
     }
 }
@@ -287,21 +298,21 @@ where
 /// 对应文章 4.3 节「第二层：API Key 验证」——服务间调用用。
 pub struct ApiKeyAuth;
 
-impl<S> FromRequestParts<S> for ApiKeyAuth
-where
-    S: Send + Sync,
-    AppConfig: axum::extract::FromRef<S>,
-{
+impl FromRequestParts<()> for ApiKeyAuth {
     type Rejection = AppError;
 
-    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(parts: &mut Parts, _state: &()) -> Result<Self, Self::Rejection> {
+        let state = Extension::<AppState>::from_request_parts(parts, _state)
+            .await
+            .map_err(|e| AppError::Internal(e.to_string()))?
+            .0;
         let key = parts
             .headers
             .get("x-api-key")
             .and_then(|v| v.to_str().ok())
             .ok_or_else(|| AppError::Unauthorized("missing X-API-Key header".into()))?;
-        let config = AppConfig::from_ref(state);
-        let expected = config
+        let expected = state
+            .config
             .secret("api_key")
             .ok_or_else(|| AppError::Internal("api_key not configured".into()))?;
         // 常量时间比较防时序攻击
