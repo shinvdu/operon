@@ -68,13 +68,30 @@ apps/site/src/
 - POST 用 `crypto.subtle.digest('SHA-256')` 计算 `x-amz-content-sha256`（否则 403）
 - 业务 JWT 走 `X-Authorization`（CloudFront OAC 占用 Authorization 头）
 
+### 框架能力（crates/）
+
+```
+crates/
+├── core/      # 运行时/中间件/JWT/API Key/配置/SQS Worker
+├── dynamo/    # DynamoDB 薄封装（表前缀/serde/错误映射）
+├── webhook/   # Webhook 签名验证（WebhookVerifier trait + HmacVerifier）
+└── s3/        # S3 封装（put/get + 预签名 URL）
+```
+
+- **API Key**（core `ApiKeyAuth` 提取器）：`.route("/internal", get(|_: ApiKeyAuth| async {...}))`，SSM 配 `api_key`，常量时间比较
+- **Webhook**（`operon-webhook`）：实现 `WebhookVerifier` 或用 `HmacVerifier::stripe()/github()`，作为中间件在业务前验签
+- **S3**（`operon-s3`）：`S3Client::new(&aws_config, bucket)`，`put_object/get_object` + `presign_get/put` 预签名 URL
+- **SQS**（core `run_sqs_with_setup`）：`run_sqs_with_setup(queue_url, |state| async { Ok(handler) }).await`，实现 `SqsHandler`；处理失败不删消息（可见性重试）
+
 ## 测试约定（铁律：新增功能必须带测试）
 
 - **规则**：任何新增/修改的逻辑，必须同步加单元测试；`cargo test` 全绿才允许提交
 - **运行**：`cargo test`（全部）/ `cargo test -p operon-core`（单 crate）
-- **覆盖范围**：
-  - core：JWT（签发/验证/篡改/过期/错密钥）、AppError（状态码/JSON 格式）
+- **覆盖范围**（当前 26 个）：
+  - core：JWT（签发/验证/篡改/过期/错密钥）、AppError、API Key（正确/错误/缺失）
   - dynamo：DynamoError → AppError 映射
+  - webhook：HMAC 验证（有效/无效/缺失/Stripe/GitHub 前缀）
+  - s3：预签名 URL 生成、错误映射
   - site：模型序列化（不泄露 pk/sk）、handler 认证（登录、401/403）
 - **测试写法**：
   - 纯逻辑 → 模块内 `#[cfg(test)] mod tests`
@@ -93,6 +110,6 @@ apps/site/src/
 
 ## 未做 / 后续
 
-- OIDC 登录、Webhook、SQS Worker 未实现
+- OIDC 登录（PKCE + 加密 cookie + JWKS）、基础设施 npm 包、边缘认证（CloudFront Function）未实现
 - ARM64 切换（省 ~20%）、Lambda 内存 256→128MB（实测用 36MB）
 - leads 状态流转（new → contacted → closed）未接管理界面按钮
