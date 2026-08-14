@@ -220,11 +220,11 @@ pub trait WebhookVerifier: Send + Sync + 'static {
 | 命令 | 实现状态 | 说明 |
 |---|---|---|
 | `operon gen-seed / dev-seed / token` | ✅ | 密钥生成、测试 JWT |
-| `operon init --template <api\|fullstack\|webhook>` | ⬜ | 脚手架 |
-| `operon dev` | ⬜ | 本地热重载 |
-| `operon deploy --env <env>` | ⬜（骨架用 deploy.sh） | 编译→打包→上传→IaC；生产强制 preview 确认 |
-| `operon logs --env <env> --follow` | ⬜ | CloudWatch 流式日志 |
-| ARM64 优先交叉编译 | ⬜ | 默认 `aarch64-unknown-linux-musl` |
+| `operon init --template <api\|fullstack\|webhook> <name>` | ✅ | 脚手架（`apps/` 下生成项目，路径依赖 operon crate） |
+| `operon dev [--package]` | ✅ | 本地运行（`cargo run -p`，默认 operon-site） |
+| `operon deploy --env <env> [--yes]` | ✅ | 调 `infra/deploy.sh`；prod 强制确认（`--yes` 跳过） |
+| `operon logs --env <env>` | ✅ | CloudWatch 流式日志（`aws logs tail --follow`） |
+| ARM64 优先交叉编译 | ⬜ | 默认 `aarch64-unknown-linux-musl`（待做） |
 
 ### 2.6 基础设施层 `[已实现：CFN 版]`
 
