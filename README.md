@@ -1,8 +1,8 @@
 # operon —— 一人公司无服务器框架 + Operon Cloud 公司网站
 
 > 依据《一人公司》系列文章（陈小天）的技术方案复现。**当前线上跑着一个真实的公司网站**
-> **Operon Cloud（磐云科技）**：一页宣传页 + 采购需求表单 + 管理员后台，
-> 前后端分离（S3 静态 + Lambda API），全部走无服务器架构。
+> **Operon Cloud（磐云科技）**：一页宣传页 + 采购需求表单 + 管理员后台 +
+> 普通用户登录（Google/GitHub）+ 我的记录，前后端分离（S3 静态 + Lambda API），全部走无服务器架构。
 
 **线上地址**：`https://d3recyygcu2a3x.cloudfront.net`（宣传页）、`/admin.html`（管理员后台）
 **用户流程**：访客填采购表单 → DynamoDB；管理员登录 → 查看全部需求。

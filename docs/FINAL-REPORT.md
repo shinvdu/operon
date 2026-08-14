@@ -86,6 +86,7 @@ CloudFront  https://arch.sky-city.me
                     ├─ GET  /health              健康检查
                     ├─ POST /api/leads           采购需求 → DynamoDB（公开）
                     ├─ POST /api/admin/login     管理员登录 → JWT（SSM 密码，常量时间比对）
+                    ├─ GET  /api/my/leads        我的记录（JWT 登录用户）
                     └─ GET  /api/admin/leads     需求列表（JWT + role=admin）
                         │
                         ├─ DynamoDB  operon-dev-leads（pk=LEADS, sk=时间戳）
@@ -116,6 +117,7 @@ CloudFront  https://arch.sky-city.me
 
 ### 4.1 网站功能（浏览器实测通过）
 - ✅ 一页宣传页（公司介绍/服务/优势/表单）渲染正常
+- ✅ 普通用户登录（Google/GitHub）+ 我的记录（登录后查看自己提交的需求）
 - ✅ 采购需求表单真实提交 → 入库 DynamoDB
 - ✅ 管理员登录（JWT）→ 查看需求列表
 - ✅ 自定义域名 HTTPS 访问（证书有效）

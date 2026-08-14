@@ -95,6 +95,23 @@ curl -H "X-Authorization: Bearer $TOKEN" \
 
 ---
 
+## 5. `GET /api/my/leads` — 我的采购记录（登录用户）
+
+JWT 保护，返回当前登录用户提交过的所有采购需求（按 GSI1 查询，时间倒序）。
+
+```bash
+source ~/proxy.sh
+TOKEN=<登录后 localStorage 里的 operon_token>
+curl -H "X-Authorization: Bearer $TOKEN" \
+  https://arch.sky-city.me/api/my/leads
+```
+**200** `[{"id":"...","name":"天宝","company":"个人测试","email":"...","requirements":"...","budget":"5k-20k","status":"new","created_at":...}]`
+
+> 登录方式：首页右上角「登录」（Google/GitHub）→ 回调自动存 token 并跳转 `/my.html`；
+> 登录后填表单会自动带 JWT，提交关联到当前用户。
+
+---
+
 ## 错误码速查
 
 | CODE | HTTP | 含义 |
