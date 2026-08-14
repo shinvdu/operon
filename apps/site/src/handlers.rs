@@ -15,6 +15,32 @@ fn leads_table(state: &AppState) -> String {
     format!("{}leads", state.config.table_prefix)
 }
 
+/// Google OIDC 登录回调：认证成功后签发自有 JWT（TokenDelivery::Json）。
+pub struct SiteOidcHandler;
+
+#[async_trait::async_trait]
+impl OidcAuthHandler for SiteOidcHandler {
+    async fn on_authenticated(
+        &self,
+        user_info: OidcUserInfo,
+        state: &AppState,
+    ) -> Result<(serde_json::Value, TokenDelivery), AppError> {
+        let now = operon_core::unix_now();
+        let claims = JwtClaims {
+            sub: user_info.sub.clone(),
+            email: user_info.email.clone(),
+            iat: now,
+            exp: now + 86400,
+            extra: Default::default(),
+        };
+        let token = state.jwt.sign(&claims)?;
+        Ok((
+            serde_json::json!({ "token": token, "sub": user_info.sub }),
+            TokenDelivery::Json,
+        ))
+    }
+}
+
 /// POST /api/leads —— 采购需求提交（公开）→ DynamoDB。
 pub async fn submit_lead(
     Extension(state): Extension<AppState>,

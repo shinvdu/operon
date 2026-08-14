@@ -2398,8 +2398,10 @@ name = "operon-site"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "aws-config",
  "axum",
+ "base64 0.23.1",
  "http-body-util",
  "operon-core",
  "operon-dynamo",

@@ -47,6 +47,40 @@ async fn main() -> anyhow::Result<()> {
             tracing::info!("GitHub OAuth 已启用");
         }
 
+        // Google OIDC 登录（SSM 配 google_client_id/secret 时启用；标准 OIDC，走 OidcRouter）
+        if let (Some(gcid), Some(gsec)) = (
+            state.config.secret("google_client_id").map(str::to_string),
+            state.config.secret("google_client_secret").map(str::to_string),
+        ) {
+            let base = std::env::var("OPERON_BASE_URL")
+                .unwrap_or_else(|_| "https://arch.sky-city.me".into());
+            let cfg = OidcProviderConfig {
+                name: "google".into(),
+                issuer_url: "https://accounts.google.com".into(),
+                client_id: gcid,
+                client_secret: gsec,
+                scopes: vec!["openid".into(), "email".into(), "profile".into()],
+            };
+            // OIDC state cookie key：环境变量 OPERON_OIDC_COOKIE_KEY（base64 32字节）或 dev 默认
+            let cookie_key = std::env::var("OPERON_OIDC_COOKIE_KEY")
+                .ok()
+                .and_then(|b64| {
+                    use base64::Engine;
+                    base64::engine::general_purpose::STANDARD.decode(b64).ok()
+                })
+                .and_then(|bytes| bytes.try_into().ok())
+                .unwrap_or([7u8; 32]);
+            let oidc = OidcRouter::builder()
+                .base_url(base)
+                .route_prefix("/api/auth")
+                .cookie_key(cookie_key)
+                .provider(cfg, handlers::SiteOidcHandler)
+                .build()
+                .await?;
+            router = router.merge(oidc.into_router());
+            tracing::info!("Google OIDC 已启用");
+        }
+
         // axum 0.8：AppState 用 Extension 注入（serve 只接受 Router<()>）
         Ok(router.layer(Extension(state)).with_operon_defaults())
     })
