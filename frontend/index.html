@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Operon Cloud · 磐云科技 — 无服务器云应用专家</title>
+<style>
+  :root {
+    --primary: #2563eb;
+    --primary-dark: #1e40af;
+    --bg: #0b1220;
+    --bg-soft: #111a2e;
+    --card: #16203a;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --accent: #38bdf8;
+    --success: #22c55e;
+    --error: #ef4444;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+  }
+  .container { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+
+  /* Nav */
+  nav { position: sticky; top: 0; background: rgba(11,18,32,.85); backdrop-filter: blur(8px); z-index: 10; border-bottom: 1px solid #1e293b; }
+  .nav-inner { display: flex; align-items: center; justify-content: space-between; padding: 16px 0; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.15rem; }
+  .brand .logo { width: 34px; height: 34px; border-radius: 8px; background: linear-gradient(135deg, var(--primary), var(--accent)); display: flex; align-items: center; justify-content: center; font-weight: 800; color: #fff; }
+  .nav-links { display: flex; gap: 24px; align-items: center; }
+  .nav-links a { color: var(--muted); text-decoration: none; font-size: .95rem; transition: color .2s; }
+  .nav-links a:hover { color: var(--text); }
+
+  /* Hero */
+  .hero { padding: 96px 0 72px; text-align: center; background: radial-gradient(ellipse at top, #1e3a5f 0%, var(--bg) 60%); }
+  .hero h1 { font-size: 2.8rem; font-weight: 800; line-height: 1.2; margin-bottom: 20px; background: linear-gradient(90deg, #fff, var(--accent)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+  .hero p.sub { font-size: 1.15rem; color: var(--muted); max-width: 640px; margin: 0 auto 32px; }
+  .cta-row { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+  .btn { display: inline-block; padding: 12px 28px; border-radius: 8px; font-weight: 600; text-decoration: none; font-size: 1rem; transition: transform .15s, box-shadow .15s; cursor: pointer; border: none; }
+  .btn-primary { background: var(--primary); color: #fff; }
+  .btn-primary:hover { background: var(--primary-dark); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(37,99,235,.35); }
+  .btn-ghost { background: transparent; color: var(--text); border: 1px solid #334155; }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* Sections */
+  section { padding: 72px 0; }
+  .section-title { text-align: center; font-size: 1.9rem; font-weight: 700; margin-bottom: 12px; }
+  .section-sub { text-align: center; color: var(--muted); margin-bottom: 44px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+  .card { background: var(--card); border: 1px solid #1e293b; border-radius: 12px; padding: 28px; transition: transform .2s, border-color .2s; }
+  .card:hover { transform: translateY(-4px); border-color: var(--primary); }
+  .card .icon { font-size: 1.8rem; margin-bottom: 14px; }
+  .card h3 { font-size: 1.15rem; margin-bottom: 10px; }
+  .card p { color: var(--muted); font-size: .95rem; }
+
+  /* Advantages */
+  .adv { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; }
+  .adv-item { background: var(--bg-soft); border: 1px solid #1e293b; border-radius: 12px; padding: 24px; text-align: center; }
+  .adv-item .num { font-size: 1.6rem; font-weight: 800; color: var(--accent); margin-bottom: 6px; }
+  .adv-item p { color: var(--muted); font-size: .9rem; }
+
+  /* Form */
+  #contact { background: var(--bg-soft); }
+  .form-card { max-width: 640px; margin: 0 auto; background: var(--card); border: 1px solid #1e293b; border-radius: 16px; padding: 36px; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 640px) { .form-row { grid-template-columns: 1fr; } }
+  label { display: block; font-size: .9rem; color: var(--muted); margin-bottom: 6px; }
+  input, select, textarea {
+    width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #334155;
+    background: var(--bg); color: var(--text); font-size: .95rem; margin-bottom: 16px; font-family: inherit;
+  }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--primary); }
+  textarea { resize: vertical; min-height: 110px; }
+  .form-msg { margin-top: 14px; padding: 12px; border-radius: 8px; font-size: .95rem; display: none; }
+  .form-msg.ok { display: block; background: rgba(34,197,94,.12); color: var(--success); border: 1px solid rgba(34,197,94,.3); }
+  .form-msg.err { display: block; background: rgba(239,68,68,.12); color: var(--error); border: 1px solid rgba(239,68,68,.3); }
+
+  footer { border-top: 1px solid #1e293b; padding: 32px 0; color: var(--muted); font-size: .9rem; text-align: center; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="container nav-inner">
+    <div class="brand"><span class="logo">O</span>Operon Cloud</div>
+    <div class="nav-links">
+      <a href="#services">服务</a>
+      <a href="#why">优势</a>
+      <a href="#contact">联系我们</a>
+      <a href="/admin.html" style="font-size:.85rem; border:1px solid #334155; padding:6px 14px; border-radius:6px;">管理员</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="container">
+    <h1>把想法变成生产级应用<br>成本低至一杯咖啡/月</h1>
+    <p class="sub">磐云科技（Operon Cloud）专注 Rust + 无服务器（Serverless）应用开发与架构咨询，
+      让一个人也能拥有企业级的云服务——零运维、弹性伸缩、按需付费。</p>
+    <div class="cta-row">
+      <a href="#contact" class="btn btn-primary">提交采购需求</a>
+      <a href="#why" class="btn btn-ghost">了解我们的优势</a>
+    </div>
+  </div>
+</header>
+
+<section id="services">
+  <div class="container">
+    <h2 class="section-title">我们能做什么</h2>
+    <p class="section-sub">从零到一，从想法到上线，全程一个团队（甚至一个人 + AI）搞定</p>
+    <div class="cards">
+      <div class="card">
+        <div class="icon">🛠️</div>
+        <h3>无服务器应用定制</h3>
+        <p>Web 应用、API、自动化工具。用 Rust + Lambda 交付，单函数承载全部业务，部署即用、成本极低。</p>
+      </div>
+      <div class="card">
+        <div class="icon">🚀</div>
+        <h3>架构咨询与迁移</h3>
+        <p>从传统服务器 / 容器架构迁移到 Serverless，彻底摆脱运维负担，云账单直降 10 倍。</p>
+      </div>
+      <div class="card">
+        <div class="icon">🤖</div>
+        <h3>AI 应用集成</h3>
+        <p>AI 驱动开发与产品能力：自动配图、智能生成、Copilot 类功能，快速落地到你的业务里。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="why">
+  <div class="container">
+    <h2 class="section-title">为什么选择我们</h2>
+    <p class="section-sub">技术是基石，让成本与省心成为你的竞争优势</p>
+    <div class="adv">
+      <div class="adv-item"><div class="num">$2.5/月</div><p>早期服务云账单，一杯咖啡都不到</p></div>
+      <div class="adv-item"><div class="num">零运维</div><p>不用打补丁、不扩容、不盯监控</p></div>
+      <div class="adv-item"><div class="num">1 个周末</div><p>从灵感到生产上线，AI + 规格驱动</p></div>
+      <div class="adv-item"><div class="num">Rust 安全</div><p>编译期保障，AI 写的代码也靠谱</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="contact">
+  <div class="container">
+    <h2 class="section-title">告诉我们你的需求</h2>
+    <p class="section-sub">留下你的采购需求，我们会尽快与您联系</p>
+    <div class="form-card">
+      <form id="leadForm">
+        <div class="form-row">
+          <div><label>姓名 *</label><input type="text" id="name" required placeholder="您的姓名"></div>
+          <div><label>公司名称 *</label><input type="text" id="company" required placeholder="公司 / 组织"></div>
+        </div>
+        <div class="form-row">
+          <div><label>邮箱 *</label><input type="email" id="email" required placeholder="you@example.com"></div>
+          <div><label>电话</label><input type="tel" id="phone" placeholder="可选"></div>
+        </div>
+        <label>需求描述 *</label>
+        <textarea id="requirements" required placeholder="请描述你想做的产品 / 服务 / 想解决什么问题，越具体越好"></textarea>
+        <label>预算区间</label>
+        <select id="budget">
+          <option value="">请选择（可选）</option>
+          <option value="<5k">&lt; ¥5,000</option>
+          <option value="5k-20k">¥5,000 – ¥20,000</option>
+          <option value="20k-100k">¥20,000 – ¥100,000</option>
+          <option value=">100k">&gt; ¥100,000</option>
+          <option value="confidential">保密</option>
+        </select>
+        <button type="submit" class="btn btn-primary" style="width:100%">提交需求</button>
+        <div id="formMsg" class="form-msg"></div>
+      </form>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container">© 2026 Operon Cloud · 磐云科技 — 一个人也能运维的云服务</div>
+</footer>
+
+<script>
+document.getElementById('leadForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById('formMsg');
+  msg.className = 'form-msg';
+  msg.style.display = 'none';
+
+  const payload = {
+    name: document.getElementById('name').value.trim(),
+    company: document.getElementById('company').value.trim(),
+    email: document.getElementById('email').value.trim(),
+    phone: document.getElementById('phone').value.trim() || null,
+    requirements: document.getElementById('requirements').value.trim(),
+    budget: document.getElementById('budget').value || null,
+  };
+
+  try {
+    const body = JSON.stringify(payload);
+    // Lambda Function URL 的 POST 必须带 x-amz-content-sha256（浏览器计算）
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(body));
+    const hash = [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('');
+
+    const res = await fetch('/api/leads', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-amz-content-sha256': hash,
+      },
+      body,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      msg.className = 'form-msg ok';
+      msg.style.display = 'block';
+      msg.textContent = '✅ 需求已提交，我们会尽快与您联系！';
+      e.target.reset();
+    } else {
+      throw new Error(data.error?.message || `请求失败（${res.status}）`);
+    }
+  } catch (err) {
+    msg.className = 'form-msg err';
+    msg.style.display = 'block';
+    msg.textContent = '❌ ' + err.message;
+  }
+});
+</script>
+</body>
+</html>

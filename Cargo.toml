@@ -4,6 +4,7 @@ members = [
     "crates/core",
     "crates/dynamo",
     "apps/example",
+    "apps/site",
     "cli",
 ]
 

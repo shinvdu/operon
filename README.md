@@ -1,7 +1,11 @@
-# operon —— 一人公司无服务器框架（端到端测试骨架）
+# operon —— 一人公司无服务器框架 + Operon Cloud 公司网站
 
-> 依据《一人公司》系列文章（陈小天）第三/五篇的技术方案，从零复现的可运行骨架。
-> 目标：**真实验证文章的核心主张**，而非停留在纸面。
+> 依据《一人公司》系列文章（陈小天）的技术方案复现。**当前线上跑着一个真实的公司网站**
+> **Operon Cloud（磐云科技）**：一页宣传页 + 采购需求表单 + 管理员后台，
+> 前后端分离（S3 静态 + Lambda API），全部走无服务器架构。
+
+**线上地址**：`https://d3recyygcu2a3x.cloudfront.net`（宣传页）、`/admin.html`（管理员后台）
+**用户流程**：访客填采购表单 → DynamoDB；管理员登录 → 查看全部需求。
 
 ## 一、这个骨架验证了什么
 
@@ -30,12 +34,12 @@ operon/
 ├── crates/
 │   ├── core/        # 运行时引导、中间件、JWT、混合配置（环境变量 + SSM）
 │   └── dynamo/      # DynamoDB 薄封装（自动表前缀、serde 序列化、错误映射）
-├── apps/example/    # 示例 API（单 Lambda）：/health /users /me
+├── apps/
+│   ├── example/     # 骨架示例（/health /users /me，仅供学习）
+│   └── site/        # 线上公司网站后端（/api/leads, /api/admin/*）
 ├── cli/             # operon-cli：gen-seed / token / dev-seed
-└── infra/
-    ├── template.yaml     # Lambda + Function URL + DynamoDB + SSM + CloudFront OAC
-    ├── deploy.sh         # 端到端部署脚本
-    └── sigv4_request.py  # Function URL 的 SigV4 签名测试工具
+├── frontend/        # 静态前端：index.html 宣传页 + admin.html 管理后台
+└── infra/           # CloudFormation + deploy.sh（后端+前端一键部署）
 ```
 
 ## 四、本地开发（无 AWS 依赖跑通框架）
@@ -129,3 +133,11 @@ aws cloudformation delete-stack --stack-name operon-dev
 
 8. **冷启动**：Rust + Web Adapter + 静态二进制，冷启动 init 约 30-60ms（见 CloudWatch `INIT_REPORT`），
    印证文章「Rust 启动快」的论点。ARM64 可再省 ~20% 成本（改 `LambdaArchitecture=arm64` + 交叉编译）。
+
+
+继续深入开发
+
+1. 做成一个公司的一页宣传页, 公司你拟一个能用的公司(前后端分离的那种)
+2. 需要有html页面， 放到s3, 做成网站   
+3. 页面有采构需求表单， 用户填写后， 提交后， 可以进到数据库
+4. 管理员可以登陆， 看到需求表单

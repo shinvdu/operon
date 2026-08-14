@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>管理员 · Operon Cloud</title>
+<style>
+  :root {
+    --primary: #2563eb; --bg: #0b1220; --bg-soft: #111a2e; --card: #16203a;
+    --text: #e2e8f0; --muted: #94a3b8; --accent: #38bdf8; --error: #ef4444;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+  .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+  .topbar { display: flex; align-items: center; justify-content: space-between; padding: 18px 0; border-bottom: 1px solid #1e293b; }
+  .brand { font-weight: 700; }
+  .brand a { color: var(--text); text-decoration: none; }
+  .btn { padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer; font-size: .9rem; background: var(--primary); color: #fff; }
+  .btn-ghost { background: transparent; border: 1px solid #334155; color: var(--text); }
+  .btn:hover { opacity: .9; }
+
+  .login-wrap { display: flex; justify-content: center; padding: 100px 0; }
+  .login-card { background: var(--card); border: 1px solid #1e293b; border-radius: 14px; padding: 36px; width: 380px; }
+  .login-card h2 { margin-bottom: 20px; font-size: 1.3rem; }
+  label { display: block; font-size: .9rem; color: var(--muted); margin-bottom: 6px; }
+  input { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #334155; background: var(--bg); color: var(--text); font-size: .95rem; margin-bottom: 16px; }
+  input:focus { outline: none; border-color: var(--primary); }
+  .msg { margin-top: 12px; padding: 10px; border-radius: 8px; font-size: .9rem; display: none; }
+  .msg.err { display: block; background: rgba(239,68,68,.12); color: var(--error); border: 1px solid rgba(239,68,68,.3); }
+
+  .panel { padding: 24px 0 60px; }
+  .panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+  .panel-head h2 { font-size: 1.4rem; }
+  .stats { display: flex; gap: 20px; margin-bottom: 18px; flex-wrap: wrap; }
+  .stat { background: var(--bg-soft); border: 1px solid #1e293b; border-radius: 10px; padding: 14px 22px; }
+  .stat .n { font-size: 1.5rem; font-weight: 800; color: var(--accent); }
+  .stat .l { font-size: .85rem; color: var(--muted); }
+
+  table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid #1e293b; border-radius: 12px; overflow: hidden; font-size: .92rem; }
+  th, td { text-align: left; padding: 12px 14px; border-bottom: 1px solid #1e293b; vertical-align: top; }
+  th { background: var(--bg-soft); color: var(--muted); font-weight: 600; white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: .78rem; background: rgba(56,189,248,.15); color: var(--accent); }
+  .req { max-width: 320px; white-space: pre-wrap; }
+  .empty { text-align: center; color: var(--muted); padding: 60px 0; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <div class="topbar">
+    <div class="brand"><a href="/">← Operon Cloud 管理后台</a></div>
+    <div id="topRight"></div>
+  </div>
+</div>
+
+<!-- 登录视图 -->
+<div id="loginView" class="container login-wrap">
+  <div class="login-card">
+    <h2>管理员登录</h2>
+    <form id="loginForm">
+      <label>用户名</label>
+      <input type="text" id="username" value="admin" required>
+      <label>密码</label>
+      <input type="password" id="password" required>
+      <button type="submit" class="btn" style="width:100%">登录</button>
+      <div id="loginMsg" class="msg"></div>
+    </form>
+  </div>
+</div>
+
+<!-- 需求列表视图 -->
+<div id="panelView" class="container panel hidden">
+  <div class="panel-head">
+    <h2>采购需求列表</h2>
+    <div>
+      <button class="btn btn-ghost" id="refreshBtn">刷新</button>
+      <button class="btn btn-ghost" id="logoutBtn">退出登录</button>
+    </div>
+  </div>
+  <div class="stats">
+    <div class="stat"><div class="n" id="statTotal">0</div><div class="l">总需求</div></div>
+    <div class="stat"><div class="n" id="statNew">0</div><div class="l">待跟进</div></div>
+  </div>
+  <table id="leadsTable">
+    <thead>
+      <tr><th>提交时间</th><th>姓名</th><th>公司</th><th>邮箱</th><th>电话</th><th>需求描述</th><th>预算</th><th>状态</th></tr>
+    </thead>
+    <tbody id="leadsBody"></tbody>
+  </table>
+  <div id="emptyMsg" class="empty hidden">暂无采购需求</div>
+</div>
+
+<script>
+const TOKEN_KEY = 'operon_admin_token';
+
+function getToken() { return localStorage.getItem(TOKEN_KEY); }
+function setToken(t) { t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY); }
+
+async function sha256Hex(text) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function api(path, { method = 'GET', body = null, token = null } = {}) {
+  const headers = {};
+  if (body) {
+    headers['Content-Type'] = 'application/json';
+    headers['x-amz-content-sha256'] = await sha256Hex(body); // Function URL 必需
+  }
+  if (token) headers['X-Authorization'] = `Bearer ${token}`; // OAC 占用 Authorization，JWT 走 X-Authorization
+  const res = await fetch(path, { method, headers, body });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error?.message || `请求失败（${res.status}）`);
+  return data;
+}
+
+function renderPanel() {
+  document.getElementById('loginView').classList.add('hidden');
+  document.getElementById('panelView').classList.remove('hidden');
+  document.getElementById('topRight').innerHTML = '<span style="color:var(--muted);font-size:.9rem;margin-right:10px">admin</span>';
+}
+
+function renderLogin() {
+  document.getElementById('panelView').classList.add('hidden');
+  document.getElementById('loginView').classList.remove('hidden');
+  document.getElementById('topRight').innerHTML = '';
+}
+
+async function loadLeads() {
+  try {
+    const leads = await api('/api/admin/leads', { token: getToken() });
+    const body = document.getElementById('leadsBody');
+    const total = leads.length, newCount = leads.filter(l => l.status === 'new').length;
+    document.getElementById('statTotal').textContent = total;
+    document.getElementById('statNew').textContent = newCount;
+    document.getElementById('emptyMsg').classList.toggle('hidden', total > 0);
+
+    body.innerHTML = leads.map(l => `
+      <tr>
+        <td style="white-space:nowrap">${new Date(l.created_at * 1000).toLocaleString('zh-CN')}</td>
+        <td>${escapeHtml(l.name)}</td>
+        <td>${escapeHtml(l.company)}</td>
+        <td><a href="mailto:${escapeHtml(l.email)}" style="color:var(--accent)">${escapeHtml(l.email)}</a></td>
+        <td>${escapeHtml(l.phone || '-')}</td>
+        <td class="req">${escapeHtml(l.requirements)}</td>
+        <td>${escapeHtml(l.budget || '-')}</td>
+        <td><span class="badge">${escapeHtml(l.status)}</span></td>
+      </tr>`).join('');
+  } catch (err) {
+    if (err.message.includes('401') || err.message.includes('UNAUTHORIZED')) {
+      setToken(null); renderLogin();
+    }
+    alert('加载失败：' + err.message);
+  }
+}
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// 登录
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById('loginMsg');
+  msg.className = 'msg'; msg.style.display = 'none';
+  try {
+    const data = await api('/api/admin/login', {
+      method: 'POST',
+      body: JSON.stringify({
+        username: document.getElementById('username').value.trim(),
+        password: document.getElementById('password').value,
+      }),
+    });
+    setToken(data.token);
+    renderPanel();
+    loadLeads();
+  } catch (err) {
+    msg.className = 'msg err'; msg.style.display = 'block';
+    msg.textContent = '❌ ' + err.message;
+  }
+});
+
+document.getElementById('logoutBtn').addEventListener('click', () => { setToken(null); renderLogin(); });
+document.getElementById('refreshBtn').addEventListener('click', loadLeads);
+
+// 初始化
+if (getToken()) { renderPanel(); loadLeads(); }
+</script>
+</body>
+</html>

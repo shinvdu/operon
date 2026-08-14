@@ -1,17 +1,17 @@
-# operon 端到端骨架基础设施
+# Operon Cloud 公司网站基础设施（前后端分离）
 #
-# 对应文章第三篇的核心架构：
-# - 单 Lambda（Web Adapter 跑 axum）承载所有 HTTP 路由
-# - Function URL（AWS_IAM 认证）替代 API Gateway —— 每百万请求省 $1
-# - CloudFront + OAC 前置：只有经 CloudFront SigV4 签名的请求才能到达 Lambda
-# - DynamoDB 按需计费表（dev/prod 环境隔离）
-# - JWT 密钥在 SSM（SecureString），由 deploy.sh 预置，运行时冷启动批量拉取
+# 拓扑：
+#   CloudFront
+#     ├─ /api/*  → Lambda Function URL（site 应用，OAC SigV4）
+#     └─ 默认    → S3 静态网站（index.html / admin.html，OAC）
 #
-# 与文章方案的差异：文章用 Pulumi(TypeScript) npm 包抽象；这里为测试骨架
-# 用 CloudFormation 声明式模板，等价且无需额外工具链。
+# 已验证的关键配置（勿随意改）：
+#   - OAC 需两条 Lambda 权限（InvokeFunctionUrl + InvokeFunction）
+#   - CachingDisabled = 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+#   - AllViewerExceptHostHeader = b689b0a8-53d0-40ab-baf2-68738e2966ac
 
 AWSTemplateFormatVersion: "2010-09-09"
-Description: operon end-to-end skeleton (Lambda + Function URL + DynamoDB + SSM + CloudFront OAC)
+Description: Operon Cloud company website (S3 frontend + Lambda API + DynamoDB leads)
 
 Parameters:
   Project:
@@ -35,18 +35,18 @@ Parameters:
     Description: S3 key of the packaged bootstrap.zip
   WebAdapterLayerArn:
     Type: String
-    Description: AWS Lambda Web Adapter layer ARN for this region/arch
+    Description: AWS Lambda Web Adapter layer ARN
     Default: "arn:aws:lambda:us-west-2:753240598075:layer:LambdaAdapterLayerX86:28"
 
 Conditions:
   IsArm64: !Equals [!Ref LambdaArchitecture, arm64]
 
 Resources:
-  # ---------- DynamoDB（按需计费，单表） ----------
-  UsersTable:
+  # ---------- DynamoDB：采购需求表 ----------
+  LeadsTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub "${Project}-${Environment}-users"
+      TableName: !Sub "${Project}-${Environment}-leads"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - { AttributeName: pk, AttributeType: S }
@@ -57,6 +57,36 @@ Resources:
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
 
+  # ---------- S3：前端静态托管 ----------
+  FrontendBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${Project}-${Environment}-frontend"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+
+  # 关键：S3 OAC 需要 bucket policy 授信（仅允许本 distribution 的 OAC 签名访问）
+  FrontendBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FrontendBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub "arn:aws:s3:::${FrontendBucket}/*"
+            Condition:
+              StringEquals:
+                "AWS:SourceArn": !Sub "arn:aws:cloudfront::${AWS::AccountId}:distribution/${ApiDistribution}"
+
   # ---------- IAM ----------
   LambdaRole:
     Type: AWS::IAM::Role
@@ -65,11 +95,10 @@ Resources:
         Version: "2012-10-17"
         Statement:
           - Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
+            Principal: { Service: lambda.amazonaws.com }
             Action: sts:AssumeRole
       Policies:
-        - PolicyName: operon-lambda-policy
+        - PolicyName: operon-site-policy
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
@@ -87,10 +116,9 @@ Resources:
                   - dynamodb:PutItem
                   - dynamodb:Query
                   - dynamodb:DeleteItem
-                  - dynamodb:Scan
                 Resource:
-                  - !GetAtt UsersTable.Arn
-                  - !Sub "${UsersTable.Arn}/*"
+                  - !GetAtt LeadsTable.Arn
+                  - !Sub "${LeadsTable.Arn}/*"
               - Sid: SSMSecrets
                 Effect: Allow
                 Action:
@@ -103,11 +131,11 @@ Resources:
                   - kms:Decrypt
                 Resource: !Sub "arn:aws:kms:${AWS::Region}:${AWS::AccountId}:alias/aws/ssm"
 
-  # ---------- Lambda（单函数打天下，Web Adapter 承载 axum） ----------
-  ApiFunction:
+  # ---------- Lambda：site 应用（单函数打天下） ----------
+  SiteFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub "${Project}-${Environment}-api"
+      FunctionName: !Sub "${Project}-${Environment}-site"
       Runtime: provided.al2023
       Handler: bootstrap
       Architectures:
@@ -132,95 +160,113 @@ Resources:
         - Key: project
           Value: !Ref Project
 
-  # ---------- Function URL（替代 API Gateway，AWS_IAM 认证） ----------
-  ApiFunctionUrl:
+  # ---------- Function URL（AWS_IAM 认证） ----------
+  SiteFunctionUrl:
     Type: AWS::Lambda::Url
     Properties:
-      TargetFunctionArn: !Ref ApiFunction
+      TargetFunctionArn: !Ref SiteFunction
       AuthType: AWS_IAM
       Cors:
         AllowOrigins: ["*"]
         AllowMethods: ["*"]
         AllowHeaders: ["*"]
 
-  # 关键：Function URL 用 AWS_IAM 认证时，必须授权 CloudFront OAC 调用
-  # （resource-based policy）。缺了这条 CloudFront 会返回 403。
-  ApiFunctionUrlInvokePermission:
+  # OAC 需要的两条权限（缺任一都会 403）
+  SiteFunctionUrlInvokePermission:
     Type: AWS::Lambda::Permission
     Properties:
       Action: lambda:InvokeFunctionUrl
-      FunctionName: !Ref ApiFunction
+      FunctionName: !Ref SiteFunction
       Principal: cloudfront.amazonaws.com
       SourceArn: !Sub "arn:aws:cloudfront::${AWS::AccountId}:distribution/${ApiDistribution}"
       FunctionUrlAuthType: AWS_IAM
-
-  # 关键：OAC 转发还要求 lambda:InvokeFunction 权限（官方文档列出两条）。
-  # 只加 InvokeFunctionUrl 时 CloudFront 会返回 403 AccessDeniedException。
-  ApiFunctionInvokePermission:
+  SiteFunctionInvokePermission:
     Type: AWS::Lambda::Permission
     Properties:
       Action: lambda:InvokeFunction
-      FunctionName: !Ref ApiFunction
+      FunctionName: !Ref SiteFunction
       Principal: cloudfront.amazonaws.com
       SourceArn: !Sub "arn:aws:cloudfront::${AWS::AccountId}:distribution/${ApiDistribution}"
 
-  # ---------- CloudFront + OAC（只有经 CloudFront 签名的请求能到 Lambda） ----------
-  ApiOriginAccessControl:
+  # ---------- CloudFront OAC（两个：S3 + Lambda） ----------
+  LambdaOriginAccessControl:
     Type: AWS::CloudFront::OriginAccessControl
     Properties:
       OriginAccessControlConfig:
-        Name: !Sub "${Project}-${Environment}-api-oac"
+        Name: !Sub "${Project}-${Environment}-lambda-oac"
         OriginAccessControlOriginType: lambda
         SigningBehavior: always
         SigningProtocol: sigv4
+  S3OriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub "${Project}-${Environment}-s3-oac"
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
 
+  # ---------- CloudFront：双 origin + 双 behavior ----------
   ApiDistribution:
     Type: AWS::CloudFront::Distribution
     Properties:
       DistributionConfig:
-        Comment: !Sub "${Project}-${Environment} API via CloudFront"
+        Comment: !Sub "${Project}-${Environment} Operon Cloud website"
         Enabled: true
         PriceClass: PriceClass_100
         HttpVersion: http2
+        DefaultRootObject: index.html
         Origins:
           - Id: LambdaOrigin
-            DomainName: !Select [2, !Split ["/", !GetAtt ApiFunctionUrl.FunctionUrl]]
-            OriginAccessControlId: !Ref ApiOriginAccessControl
+            DomainName: !Select [2, !Split ["/", !GetAtt SiteFunctionUrl.FunctionUrl]]
+            OriginAccessControlId: !Ref LambdaOriginAccessControl
             CustomOriginConfig:
               OriginProtocolPolicy: https-only
+          - Id: FrontendOrigin
+            DomainName: !GetAtt FrontendBucket.RegionalDomainName
+            OriginAccessControlId: !Ref S3OriginAccessControl
+            S3OriginConfig: {}
+        # /api/* → Lambda（前后端分离的 API 部分）
+        CacheBehaviors:
+          - PathPattern: /api/*
+            TargetOriginId: LambdaOrigin
+            ViewerProtocolPolicy: redirect-to-https
+            Compress: true
+            CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+            OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
+            AllowedMethods:
+              - DELETE
+              - GET
+              - HEAD
+              - OPTIONS
+              - PATCH
+              - POST
+              - PUT
+            CachedMethods: [GET, HEAD]
+        # 默认 → S3 静态站点（index.html / admin.html）
         DefaultCacheBehavior:
-          TargetOriginId: LambdaOrigin
+          TargetOriginId: FrontendOrigin
           ViewerProtocolPolicy: redirect-to-https
           Compress: true
-          # API 不做边缘缓存（CachingDisabled = 4135ea2d-6df8-44a3-9df3-4b5a84be39ad；
-          # 658327ea 是 CachingOptimized，会缓存 200 响应导致带认证接口返回缓存）
           CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
-          # 关键：转发 viewer 的 X-Authorization 头给 origin。
-          # 默认 CachePolicy 只转发基础头，自定义 header 需要 OriginRequestPolicy。
-          # AllViewerExceptHostHeader = b689b0a8-53d0-40ab-baf2-68738e2966ac
-          OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
-          AllowedMethods:
-            - DELETE
-            - GET
-            - HEAD
-            - OPTIONS
-            - PATCH
-            - POST
-            - PUT
+          AllowedMethods: [GET, HEAD, OPTIONS]
           CachedMethods: [GET, HEAD]
 
 Outputs:
-  FunctionUrl:
-    Description: Lambda Function URL（需 SigV4 签名访问）
-    Value: !GetAtt ApiFunctionUrl.FunctionUrl
-  CloudFrontDomain:
-    Description: CloudFront 默认域名（直接 curl 访问）
-    Value: !GetAtt ApiDistribution.DomainName
   CloudFrontUrl:
-    Description: CloudFront https URL
+    Description: 网站 URL
     Value: !Sub "https://${ApiDistribution.DomainName}"
-  UsersTableName:
-    Value: !Ref UsersTable
+  CloudFrontDomain:
+    Value: !GetAtt ApiDistribution.DomainName
+  FunctionUrl:
+    Description: Lambda Function URL（需 SigV4 签名）
+    Value: !GetAtt SiteFunctionUrl.FunctionUrl
+  LeadsTableName:
+    Value: !Ref LeadsTable
+  FrontendBucket:
+    Value: !Ref FrontendBucket
   JwtSeedParameter:
-    Description: SSM 中 JWT 密钥参数名
     Value: !Sub "/${Project}/${Environment}/jwt_seed"
+  AdminPasswordParameter:
+    Description: SSM 中管理员密码参数名
+    Value: !Sub "/${Project}/${Environment}/admin_password"

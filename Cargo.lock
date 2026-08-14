@@ -1689,6 +1689,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "operon-site"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "operon-core",
+ "operon-dynamo",
+ "serde",
+ "serde_json",
+ "subtle",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "outref"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
