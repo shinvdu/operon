@@ -210,7 +210,7 @@ b6872fd feat(operon): 搭建一人公司无服务器框架端到端骨架
 
 ## 十、后续建议
 
-- [ ] OIDC 登录（剩余最重的认证模块：PKCE + 加密 cookie + JWKS）
+- [x] OIDC 登录（2026-08-14 完成，基于 openidconnect）
 - [ ] 基础设施 npm 包抽象（CFN 模板 → 可复用 npm 包，文章「600 行到 80 行」）
 - [ ] 边缘认证（CloudFront Function 纵深防御，第一层边缘验 JWT）
 - [ ] Lambda 内存 256MB → 128MB（实测仅用 36MB，成本再降一半）

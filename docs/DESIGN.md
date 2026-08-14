@@ -150,27 +150,28 @@ pub struct JwtClaims { sub, email, iat, exp, #[serde(flatten)] extra }
 // 提取器 JwtAuth: 优先 X-Authorization，回退 Authorization（OAC 占用后者）
 ```
 
-**API Key `[待实现]`**：`X-API-Key` 头 → SSM 密钥 → `subtle::ConstantTimeEq` 常量时间比较。
+**API Key `[已实现]`**：`ApiKeyAuth` 提取器，`X-API-Key` 头 → SSM `api_key` → `subtle::ConstantTimeEq` 常量时间比较。
 
-**OIDC `[待实现]`** —— Authorization Code + PKCE 状态机：
+**OIDC `[已实现]`** —— 基于 **openidconnect**（通过 OpenID Relying Party Certification 官方认证）：
 
 ```
-GET /api/auth/{provider}              → 302 到 IdP（带 code_challenge + 加密 state cookie）
-GET /api/auth/{provider}/callback     → 换 token → 验证 ID Token 签名 → upsert 用户
-                                        → 签发自有 JWT → HttpOnly cookie 或 body 交付
+GET /api/auth/{provider}              → 302 到 IdP（PKCE + 加密 state cookie）
+GET /api/auth/{provider}/callback     → 换 token → 库验证 ID Token → 业务 handler
 GET /.well-known/jwks.json            → Ed25519 公钥端点
 ```
 
-状态管理：`state`/`nonce` 用 **AES-256-GCM 加密进 cookie**，无需 Redis/服务端存储。
+- Discovery / Authorization Code + PKCE / ID Token 验证（JWKS + exp/aud/iss/nonce）由 openidconnect 处理；
+- `state`（csrf + nonce + pkce_verifier）用 **AES-256-GCM 加密进 cookie**，无需服务端存储；
+- 成功后调用 `OidcAuthHandler`，业务签发自有 JWT。
 框架 API（文章原文）：
 ```rust
 let oidc = OidcRouter::builder()
     .base_url("https://myapp.example.com")
     .route_prefix("/api/auth")
-    .cookie_key(key).token_signer(signer)
-    .provider(google_config, client_id, client_secret, MyAuthHandler)
+    .cookie_key(key)
+    .provider(google_config, MyAuthHandler)
     .build().await?;   // 内部做 .well-known 发现
-let (oidc_routes, token_signer) = oidc.into_parts();  // 路由 + 签名器注入
+let router = Router::new().merge(oidc.into_router()).with_state(state);
 ```
 
 ### 2.2 operon-dynamo `[已实现]`
@@ -255,7 +256,7 @@ pub trait WebhookVerifier: Send + Sync + 'static {
 | ADR-7 | IaC 用 CloudFormation（骨架）而非 Pulumi | 零额外工具链、幂等；与文章 Pulumi 方案等价 | ✅ |
 | ADR-8 | API 不缓存（CachingDisabled） | 带认证接口若被缓存将返回陈旧数据 | ✅ |
 | ADR-9 | Web Adapter 而非自研 Lambda Runtime | 保留完整 axum 能力、官方成熟方案 | ✅ |
-| ADR-10 | OIDC state 用 AES-256-GCM 加密 cookie | 无服务端状态存储 | ⬜ |
+| ADR-10 | OIDC state 用 AES-256-GCM 加密 cookie（openidconnect） | 无服务端状态存储 | ✅ |
 | ADR-11 | DynamoDB 单表 pk/sk + GSI | 冗余换查询灵活性；表数最小化降低 IAM/监控面 | ✅ |
 
 ---
@@ -343,10 +344,10 @@ operon-dev-api Lambda (x86_64, 256MB, provided.al2023, Web Adapter)
 ## 10. 实现状态与路线图
 
 ```
-✅ 已完成   core 运行时/中间件/JWT/配置 | dynamo 薄封装 | example 应用
-           CFN 基础设施 + deploy.sh | CLI 密钥/token | 端到端验证 + 性能实测
-⬜ 下一步   OIDC(FR-3.3) → SQS Worker(FR-1.4) → Webhook(FR-7) → S3(FR-6)
-           CLI 完整化(FR-8) → 基础设施 npm 包(FR-9.4) → ARM64 → 边缘认证(FR-3.5)
+✅ 已完成   core 运行时/中间件/JWT/API Key/OIDC/SQS | dynamo/webhook/s3 封装
+           site 应用 + 模块化 | CLI 完整(init/dev/deploy/logs) | 29 单元测试
+           CFN 基础设施 + deploy.sh | 自定义域名 + 证书续期 | 成本告警
+⬜ 下一步   基础设施 npm 包(FR-9.4) → 边缘认证(FR-3.5) → ARM64 → 内存 256→128MB
 ```
 
 每步实施建议遵循：**更新本 TDD → 让 Claude Code 实现 → musl 编译 + lint/test →
