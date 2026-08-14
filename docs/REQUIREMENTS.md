@@ -155,7 +155,7 @@
 
 ## 7. 范围与优先级（MoSCoW + 实现状态）
 
-> ✅ = 当前骨架已实现；⬜ = 待实现
+> ✅ = 已实现；🟡 = 部分实现；⬜ = 待实现（更新于 2026-08-14）
 
 ### Must（必须）
 - [✅] 单 Lambda + axum 多路由运行时（FR-1.1, 1.2, 1.3）
@@ -173,7 +173,7 @@
 - [⬜] SQS Worker 运行时 `run_sqs_with_setup`（FR-1.4）
 - [⬜] Webhook 验证器（Stripe/GitHub/HMAC）（FR-7）
 - [⬜] S3 封装 + 预签名 URL（FR-6）
-- [⬜] CLI 完整：init / dev / deploy / logs，ARM64 优先（FR-8）
+- [✅] CLI 完整：init / dev / deploy / logs（FR-8；ARM64 优先仍 ⬜）
 - [⬜] 基础设施 npm 包抽象（FR-9.3, 9.4）
 - [⬜] 边缘认证（CloudFront Function）（FR-3.5）
 
@@ -186,6 +186,14 @@
 ### Won't（本阶段不做）
 - 容器 / K8s / 长连接 / WebSocket（违反约束 1）
 - ORM、迁移工具（违反 FR-5.5）
+
+### 额外已完成（超出原始需求，实际落地）
+- [✅] **自定义域名**：`arch.sky-city.me` + Let's Encrypt（DNS-01 TXT）→ 导入 ACM → CloudFront 绑定
+- [✅] **证书自动续期**：acme.sh cron → `renew-acm.sh`（导入 ACM → 更新 CloudFront → 同步 CFN → 清理旧证书）
+- [✅] **成本告警**：AWS Budgets（$10/月）+ SNS → 163 邮箱（85%/100% 阈值）
+- [✅] **凭证安全**：密钥移入 `.env`（gitignore 排除），文档不再含明文；git 历史已重写抹除
+- [✅] **单元测试**：17 个（JWT/错误映射/模型/认证），约定新功能必须带测试
+- [✅] **后端模块化**：apps/site 拆分为 main/models/handlers（对应文章三层架构）
 
 ---
 
