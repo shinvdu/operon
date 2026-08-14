@@ -68,6 +68,20 @@ apps/site/src/
 - POST 用 `crypto.subtle.digest('SHA-256')` 计算 `x-amz-content-sha256`（否则 403）
 - 业务 JWT 走 `X-Authorization`（CloudFront OAC 占用 Authorization 头）
 
+## 测试约定（铁律：新增功能必须带测试）
+
+- **规则**：任何新增/修改的逻辑，必须同步加单元测试；`cargo test` 全绿才允许提交
+- **运行**：`cargo test`（全部）/ `cargo test -p operon-core`（单 crate）
+- **覆盖范围**：
+  - core：JWT（签发/验证/篡改/过期/错密钥）、AppError（状态码/JSON 格式）
+  - dynamo：DynamoError → AppError 映射
+  - site：模型序列化（不泄露 pk/sk）、handler 认证（登录、401/403）
+- **测试写法**：
+  - 纯逻辑 → 模块内 `#[cfg(test)] mod tests`
+  - handler → `tower::ServiceExt::oneshot` 构造 HTTP 请求，断言状态码与响应
+  - 依赖 AWS 的调用（DynamoDB 读写）本地不跑；只测不依赖云的部分，认证/权限检查在 DB 之前，可测
+- **提交检查**：改完代码跑一遍 `cargo test`，全绿再 commit
+
 ## 部署排坑速查
 
 1. **OAC 需要两条 Lambda 权限**（`InvokeFunctionUrl` + `InvokeFunction`），模板已含，勿删
