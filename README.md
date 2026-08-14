@@ -134,10 +134,3 @@ aws cloudformation delete-stack --stack-name operon-dev
 8. **冷启动**：Rust + Web Adapter + 静态二进制，冷启动 init 约 30-60ms（见 CloudWatch `INIT_REPORT`），
    印证文章「Rust 启动快」的论点。ARM64 可再省 ~20% 成本（改 `LambdaArchitecture=arm64` + 交叉编译）。
 
-
-继续深入开发
-
-1. 做成一个公司的一页宣传页, 公司你拟一个能用的公司(前后端分离的那种)
-2. 需要有html页面， 放到s3, 做成网站   
-3. 页面有采构需求表单， 用户填写后， 提交后， 可以进到数据库
-4. 管理员可以登陆， 看到需求表单
